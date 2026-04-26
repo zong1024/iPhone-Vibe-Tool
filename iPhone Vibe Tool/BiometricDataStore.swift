@@ -12,10 +12,15 @@ import SwiftUI
 final class BiometricDataStore: ObservableObject {
     @Published private(set) var profile: BiometricsProfile = .sample
     @Published private(set) var sourceLabel = "演示数据"
-    @Published private(set) var statusText = "正在使用示例数据。"
-    @Published private(set) var detailText = "App 已经可以发声，但如果要真正根据身体状态生成节奏，还需要从 Apple 健康读取数据。"
+    @Published private(set) var statusText = "正在显示一组演示节律。"
+    @Published private(set) var detailText = "真机授权后，节拍、纹理和铺底会改由今天的 Apple 健康数据驱动。"
     @Published private(set) var errorText: String?
     @Published private(set) var isLoading = false
+    @Published private(set) var guidance: [String] = [
+        "请在真机上运行，模拟器通常无法提供健康数据。",
+        "第一次进入时允许读取“心率、步数、睡眠、心率变异性”。",
+        "如果仍然没有数据，请确认健康 App 里本身已经有样本。"
+    ]
 
     var isUsingLiveData: Bool {
         sourceLabel == "Apple 健康"
@@ -49,37 +54,97 @@ final class BiometricDataStore: ObservableObject {
         case .success(let snapshot):
             profile = .live(snapshot)
             sourceLabel = "Apple 健康"
-            statusText = "已同步今天的数据，更新时间 \(timeFormatter.string(from: .now))。"
+            statusText = "已同步健康数据，更新于 \(timeFormatter.string(from: .now))。"
             detailText = profile.insightText
-            errorText = nil
-        case .fallback(let message):
+            errorText = snapshot.missingDataNote
+            guidance = [
+                "心率和 HRV 往往来自 Apple Watch，未佩戴时可能会缺失。",
+                "睡眠通常需要睡眠追踪或 Apple Watch 数据才更完整。",
+                "点“刷新”可以在新样本写入健康后重新生成节律。"
+            ]
+        case .fallback(let state):
             profile = .sample
             sourceLabel = "演示数据"
-            statusText = "当前未拿到真实健康数据。"
-            detailText = "这套节奏先用演示数据驱动。你在真机上授权 HealthKit 后，再点“刷新数据”就会切到当天的身体状态。"
-            errorText = message
+            statusText = state.title
+            detailText = state.detail
+            errorText = state.errorText
+            guidance = state.guidance
         }
     }
 }
 
 enum HealthLoadResult {
     case success(HealthSnapshot)
-    case fallback(String)
+    case fallback(HealthFallbackState)
+}
+
+struct HealthFallbackState {
+    let title: String
+    let detail: String
+    let errorText: String?
+    let guidance: [String]
 }
 
 struct HealthSnapshot {
-    let heartRate: Double
-    let stepCount: Double
-    let sleepHours: Double
-    let hrv: Double
+    let heartRate: Double?
+    let stepCount: Double?
+    let sleepHours: Double?
+    let hrv: Double?
+
+    var hasAnyData: Bool {
+        heartRate != nil || stepCount != nil || sleepHours != nil || hrv != nil
+    }
+
+    var missingDataNote: String? {
+        let missing = missingMetrics
+        guard !missing.isEmpty else {
+            return nil
+        }
+
+        return "以下数据暂时缺失：\(missing.joined(separator: "、"))。节律已用已有项目生成。"
+    }
+
+    var missingMetrics: [String] {
+        var names: [String] = []
+
+        if heartRate == nil {
+            names.append("心率")
+        }
+
+        if stepCount == nil {
+            names.append("步数")
+        }
+
+        if sleepHours == nil {
+            names.append("睡眠")
+        }
+
+        if hrv == nil {
+            names.append("HRV")
+        }
+
+        return names
+    }
 }
 
 final class HealthKitManager {
     private let store = HKHealthStore()
+    private let calendar = Calendar.current
 
     func loadSnapshot() async -> HealthLoadResult {
         guard HKHealthStore.isHealthDataAvailable() else {
-            return .fallback("当前设备不支持 HealthKit，已切回演示数据。")
+            return .fallback(
+                HealthFallbackState(
+                    title: "当前设备不支持 Apple 健康。",
+                    detail: "HealthKit 在不支持的设备、部分受限环境或模拟器里会不可用，所以先切回演示节律。",
+                    errorText: "HealthKit 当前不可用。",
+                    guidance: [
+                        "请改用 iPhone 真机测试。",
+                        "如果是真机，检查是否被企业或家长控制限制了健康数据。",
+                        "健康数据可用后，再点“刷新”。"
+                    ]
+                )
+            )
         }
 
         do {
@@ -87,34 +152,70 @@ final class HealthKitManager {
             let authorized = try await requestAuthorization(readTypes: readTypes)
 
             guard authorized else {
-                return .fallback("HealthKit 授权没有完成，已切回演示数据。")
+                return .fallback(
+                    HealthFallbackState(
+                        title: "健康权限尚未完成授权。",
+                        detail: "你可以先听演示节律；一旦允许读取健康数据，这个页面就会切到当天的真实状态。",
+                        errorText: "没有完成 HealthKit 授权。",
+                        guidance: [
+                            "重新点一次“刷新数据”触发授权。",
+                            "如果系统不再弹窗，请到 健康 App -> 资料 -> App 与服务 里开启本 App。",
+                            "至少允许步数或心率后，就能生成半真实节律。"
+                        ]
+                    )
+                )
             }
 
-            async let heartRate = averageHeartRateToday()
+            async let heartRate = mostUsefulHeartRate()
             async let stepCount = stepCountToday()
-            async let sleepHours = lastNightSleepHours()
-            async let hrv = averageHRVToday()
+            async let sleepHours = recentSleepHours()
+            async let hrv = recentAverageHRV()
 
-            let snapshot = try await HealthSnapshot(
+            let snapshot = await HealthSnapshot(
                 heartRate: heartRate,
                 stepCount: stepCount,
                 sleepHours: sleepHours,
                 hrv: hrv
             )
 
-            guard snapshot.stepCount > 0 || snapshot.sleepHours > 0 || snapshot.heartRate > 0 || snapshot.hrv > 0 else {
-                return .fallback("已获得 HealthKit 权限，但今天还没有可用样本。")
+            guard snapshot.hasAnyData else {
+                return .fallback(
+                    HealthFallbackState(
+                        title: "已连上 Apple 健康，但还没有读到可用样本。",
+                        detail: "这通常不是代码错误，而是健康库里目前没有对应数据，或者今天还没产生新样本。",
+                        errorText: "未获取到心率、步数、睡眠或 HRV 样本。",
+                        guidance: [
+                            "步数通常最容易拿到，走动后再回来刷新一次。",
+                            "心率、HRV 和睡眠更依赖 Apple Watch 或其他健康来源。",
+                            "若你刚刚授权，等几秒后再试一次。"
+                        ]
+                    )
+                )
             }
 
             return .success(snapshot)
+        } catch let error as HKError {
+            return .fallback(fallbackState(for: error))
         } catch {
-            return .fallback("读取 Apple 健康失败：\(error.localizedDescription)")
+            return .fallback(
+                HealthFallbackState(
+                    title: "读取 Apple 健康时出了点问题。",
+                    detail: "我先回退到演示数据，方便继续调声音和界面。",
+                    errorText: "读取 Apple 健康失败：\(error.localizedDescription)",
+                    guidance: [
+                        "确认手机已解锁后再刷新。",
+                        "在健康 App 中检查这个 App 的读取权限。",
+                        "如果问题持续，把这里的报错文字发给我，我继续对着修。"
+                    ]
+                )
+            )
         }
     }
 
     private func requiredReadTypes() throws -> Set<HKObjectType> {
         guard
             let heartRate = HKObjectType.quantityType(forIdentifier: .heartRate),
+            let restingHeartRate = HKObjectType.quantityType(forIdentifier: .restingHeartRate),
             let stepCount = HKObjectType.quantityType(forIdentifier: .stepCount),
             let hrv = HKObjectType.quantityType(forIdentifier: .heartRateVariabilitySDNN),
             let sleep = HKObjectType.categoryType(forIdentifier: .sleepAnalysis)
@@ -122,7 +223,7 @@ final class HealthKitManager {
             throw HealthKitManagerError.unsupportedTypes
         }
 
-        return [heartRate, stepCount, hrv, sleep]
+        return [heartRate, restingHeartRate, stepCount, hrv, sleep]
     }
 
     private func requestAuthorization(readTypes: Set<HKObjectType>) async throws -> Bool {
@@ -137,145 +238,280 @@ final class HealthKitManager {
         }
     }
 
-    private func averageHeartRateToday() async throws -> Double {
-        guard let type = HKObjectType.quantityType(forIdentifier: .heartRate) else {
-            throw HealthKitManagerError.unsupportedTypes
+    private func mostUsefulHeartRate() async -> Double? {
+        if let liveHeartRate = await averageHeartRate(inLastHours: 12) {
+            return liveHeartRate
         }
 
-        let predicate = HKQuery.predicateForSamples(
-            withStart: Calendar.current.startOfDay(for: .now),
+        if let restingHeartRate = await averageQuantityValue(
+            identifier: .restingHeartRate,
+            unit: HKUnit.count().unitDivided(by: .minute()),
+            start: calendar.date(byAdding: .day, value: -7, to: .now),
             end: .now,
-            options: .strictStartDate
-        )
-
-        let unit = HKUnit.count().unitDivided(by: .minute())
-
-        return try await withCheckedThrowingContinuation { continuation in
-            let query = HKStatisticsQuery(
-                quantityType: type,
-                quantitySamplePredicate: predicate,
-                options: .discreteAverage
-            ) { _, result, error in
-                if let error {
-                    continuation.resume(throwing: error)
-                    return
-                }
-
-                let value = result?.averageQuantity()?.doubleValue(for: unit) ?? 0
-                continuation.resume(returning: value)
-            }
-
-            store.execute(query)
+            options: .discreteAverage
+        ) {
+            return restingHeartRate
         }
+
+        return await mostRecentQuantityValue(
+            identifier: .heartRate,
+            unit: HKUnit.count().unitDivided(by: .minute()),
+            start: calendar.date(byAdding: .day, value: -3, to: .now),
+            end: .now
+        )
     }
 
-    private func stepCountToday() async throws -> Double {
-        guard let type = HKObjectType.quantityType(forIdentifier: .stepCount) else {
-            throw HealthKitManagerError.unsupportedTypes
-        }
-
-        let predicate = HKQuery.predicateForSamples(
-            withStart: Calendar.current.startOfDay(for: .now),
+    private func averageHeartRate(inLastHours hours: Int) async -> Double? {
+        await averageQuantityValue(
+            identifier: .heartRate,
+            unit: HKUnit.count().unitDivided(by: .minute()),
+            start: calendar.date(byAdding: .hour, value: -hours, to: .now),
             end: .now,
-            options: .strictStartDate
+            options: .discreteAverage
         )
-
-        return try await withCheckedThrowingContinuation { continuation in
-            let query = HKStatisticsQuery(
-                quantityType: type,
-                quantitySamplePredicate: predicate,
-                options: .cumulativeSum
-            ) { _, result, error in
-                if let error {
-                    continuation.resume(throwing: error)
-                    return
-                }
-
-                let value = result?.sumQuantity()?.doubleValue(for: .count()) ?? 0
-                continuation.resume(returning: value)
-            }
-
-            store.execute(query)
-        }
     }
 
-    private func averageHRVToday() async throws -> Double {
-        guard let type = HKObjectType.quantityType(forIdentifier: .heartRateVariabilitySDNN) else {
-            throw HealthKitManagerError.unsupportedTypes
-        }
-
-        let predicate = HKQuery.predicateForSamples(
-            withStart: Calendar.current.startOfDay(for: .now),
+    private func stepCountToday() async -> Double? {
+        await averageQuantityValue(
+            identifier: .stepCount,
+            unit: .count(),
+            start: calendar.startOfDay(for: .now),
             end: .now,
-            options: .strictStartDate
+            options: .cumulativeSum
         )
-
-        let unit = HKUnit.secondUnit(with: .milli)
-
-        return try await withCheckedThrowingContinuation { continuation in
-            let query = HKStatisticsQuery(
-                quantityType: type,
-                quantitySamplePredicate: predicate,
-                options: .discreteAverage
-            ) { _, result, error in
-                if let error {
-                    continuation.resume(throwing: error)
-                    return
-                }
-
-                let value = result?.averageQuantity()?.doubleValue(for: unit) ?? 0
-                continuation.resume(returning: value)
-            }
-
-            store.execute(query)
-        }
     }
 
-    private func lastNightSleepHours() async throws -> Double {
+    private func recentAverageHRV() async -> Double? {
+        await averageQuantityValue(
+            identifier: .heartRateVariabilitySDNN,
+            unit: HKUnit.secondUnit(with: .milli),
+            start: calendar.date(byAdding: .day, value: -7, to: .now),
+            end: .now,
+            options: .discreteAverage
+        )
+    }
+
+    private func recentSleepHours() async -> Double? {
         guard let type = HKObjectType.categoryType(forIdentifier: .sleepAnalysis) else {
-            throw HealthKitManagerError.unsupportedTypes
+            return nil
         }
 
-        let start = Calendar.current.date(byAdding: .hour, value: -30, to: .now) ?? .now.addingTimeInterval(-108000)
+        let start = calendar.date(byAdding: .day, value: -3, to: .now) ?? .now.addingTimeInterval(-259200)
         let predicate = HKQuery.predicateForSamples(withStart: start, end: .now, options: [])
         let sort = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: false)
 
-        let samples: [HKCategorySample] = try await withCheckedThrowingContinuation { continuation in
-            let query = HKSampleQuery(
-                sampleType: type,
-                predicate: predicate,
-                limit: HKObjectQueryNoLimit,
-                sortDescriptors: [sort]
-            ) { _, results, error in
-                if let error {
-                    continuation.resume(throwing: error)
-                    return
+        do {
+            let samples: [HKCategorySample] = try await withCheckedThrowingContinuation { continuation in
+                let query = HKSampleQuery(
+                    sampleType: type,
+                    predicate: predicate,
+                    limit: HKObjectQueryNoLimit,
+                    sortDescriptors: [sort]
+                ) { _, results, error in
+                    if let hkError = Self.normalize(error) {
+                        if hkError.code == .errorNoData {
+                            continuation.resume(returning: [])
+                        } else {
+                            continuation.resume(throwing: hkError)
+                        }
+                        return
+                    }
+
+                    continuation.resume(returning: results as? [HKCategorySample] ?? [])
                 }
 
-                continuation.resume(returning: results as? [HKCategorySample] ?? [])
+                store.execute(query)
             }
 
-            store.execute(query)
+            let cutoff = calendar.date(byAdding: .hour, value: -36, to: .now) ?? .now.addingTimeInterval(-129600)
+            let totalSeconds = samples.reduce(0.0) { partial, sample in
+                guard Self.isAsleep(sample) else {
+                    return partial
+                }
+
+                let startDate = max(sample.startDate, cutoff)
+                let endDate = min(sample.endDate, .now)
+
+                guard endDate > startDate else {
+                    return partial
+                }
+
+                return partial + endDate.timeIntervalSince(startDate)
+            }
+
+            guard totalSeconds > 0 else {
+                return nil
+            }
+
+            return totalSeconds / 3600
+        } catch {
+            return nil
+        }
+    }
+
+    private func averageQuantityValue(
+        identifier: HKQuantityTypeIdentifier,
+        unit: HKUnit,
+        start: Date?,
+        end: Date,
+        options: HKStatisticsOptions
+    ) async -> Double? {
+        guard
+            let start,
+            let type = HKObjectType.quantityType(forIdentifier: identifier)
+        else {
+            return nil
         }
 
-        let cutoff = Calendar.current.date(byAdding: .hour, value: -24, to: .now) ?? .now.addingTimeInterval(-86400)
+        let predicate = HKQuery.predicateForSamples(
+            withStart: start,
+            end: end,
+            options: .strictStartDate
+        )
 
-        let totalSeconds = samples.reduce(0.0) { partial, sample in
-            guard Self.isAsleep(sample) else {
-                return partial
+        do {
+            return try await withCheckedThrowingContinuation { continuation in
+                let query = HKStatisticsQuery(
+                    quantityType: type,
+                    quantitySamplePredicate: predicate,
+                    options: options
+                ) { _, result, error in
+                    if let hkError = Self.normalize(error) {
+                        if hkError.code == .errorNoData {
+                            continuation.resume(returning: nil)
+                        } else {
+                            continuation.resume(throwing: hkError)
+                        }
+                        return
+                    }
+
+                    let quantity: HKQuantity?
+                    if options.contains(.cumulativeSum) {
+                        quantity = result?.sumQuantity()
+                    } else {
+                        quantity = result?.averageQuantity()
+                    }
+
+                    continuation.resume(returning: quantity?.doubleValue(for: unit))
+                }
+
+                store.execute(query)
             }
+        } catch {
+            return nil
+        }
+    }
 
-            let start = max(sample.startDate, cutoff)
-            let end = min(sample.endDate, .now)
-
-            guard end > start else {
-                return partial
-            }
-
-            return partial + end.timeIntervalSince(start)
+    private func mostRecentQuantityValue(
+        identifier: HKQuantityTypeIdentifier,
+        unit: HKUnit,
+        start: Date?,
+        end: Date
+    ) async -> Double? {
+        guard
+            let start,
+            let type = HKObjectType.quantityType(forIdentifier: identifier)
+        else {
+            return nil
         }
 
-        return totalSeconds / 3600
+        let predicate = HKQuery.predicateForSamples(withStart: start, end: end, options: .strictStartDate)
+        let sort = NSSortDescriptor(key: HKSampleSortIdentifierEndDate, ascending: false)
+
+        do {
+            return try await withCheckedThrowingContinuation { continuation in
+                let query = HKSampleQuery(
+                    sampleType: type,
+                    predicate: predicate,
+                    limit: 1,
+                    sortDescriptors: [sort]
+                ) { _, results, error in
+                    if let hkError = Self.normalize(error) {
+                        if hkError.code == .errorNoData {
+                            continuation.resume(returning: nil)
+                        } else {
+                            continuation.resume(throwing: hkError)
+                        }
+                        return
+                    }
+
+                    let sample = results?.first as? HKQuantitySample
+                    continuation.resume(returning: sample?.quantity.doubleValue(for: unit))
+                }
+
+                store.execute(query)
+            }
+        } catch {
+            return nil
+        }
+    }
+
+    private func fallbackState(for error: HKError) -> HealthFallbackState {
+        switch error.code {
+        case .errorDatabaseInaccessible:
+            return HealthFallbackState(
+                title: "手机锁屏时无法读取健康数据。",
+                detail: "Apple 官方文档说明，设备锁定时 HealthKit 数据库会暂时不可访问。",
+                errorText: "健康数据库当前不可访问，请解锁手机后重试。",
+                guidance: [
+                    "先解锁手机，再回到 App 点“刷新数据”。",
+                    "保持 App 在前台重新读取一次。",
+                    "如果是刚安装的新 App，先完成一次权限授权。"
+                ]
+            )
+        case .errorHealthDataRestricted:
+            return HealthFallbackState(
+                title: "这台设备限制了 Apple 健康访问。",
+                detail: "可能是企业设备策略或系统限制导致，App 只能先使用演示数据。",
+                errorText: "HealthKit 被系统限制。",
+                guidance: [
+                    "检查是否是公司设备或受管设备。",
+                    "到 设置 -> 屏幕使用时间 或 MDM 限制中确认健康权限。",
+                    "若无法解除限制，只能保留演示模式。"
+                ]
+            )
+        case .errorHealthDataUnavailable:
+            return HealthFallbackState(
+                title: "当前环境拿不到 Apple 健康。",
+                detail: "Apple 文档说明，不支持 HealthKit 的设备会直接返回不可用。",
+                errorText: "HealthKit 在当前设备不可用。",
+                guidance: [
+                    "请使用 iPhone 真机测试。",
+                    "iPad、模拟器或受限环境里经常会失败。",
+                    "切到真机后重新授权。"
+                ]
+            )
+        case .errorUserCanceled:
+            return HealthFallbackState(
+                title: "你取消了健康权限授权。",
+                detail: "所以我先回到演示节律，不影响你继续看 UI 和听声音。",
+                errorText: "HealthKit 授权已取消。",
+                guidance: [
+                    "点“刷新数据”再触发一次授权。",
+                    "或到 健康 App -> 资料 -> App 与服务 手动开启权限。",
+                    "至少允许步数后，这页就能开始用真实数据。"
+                ]
+            )
+        default:
+            return HealthFallbackState(
+                title: "读取 Apple 健康时出了点问题。",
+                detail: "先切回演示数据，避免页面完全不可用。",
+                errorText: "HealthKit 错误：\(error.localizedDescription)",
+                guidance: [
+                    "确认手机已解锁。",
+                    "确认健康 App 里已经存在样本。",
+                    "如果仍失败，把这条错误发给我，我继续修。"
+                ]
+            )
+        }
+    }
+
+    private static func normalize(_ error: Error?) -> HKError? {
+        guard let error else {
+            return nil
+        }
+
+        return error as? HKError
     }
 
     private static func isAsleep(_ sample: HKCategorySample) -> Bool {
@@ -386,60 +622,65 @@ struct BiometricsProfile: Equatable {
     }
 
     static let sample = BiometricsProfile(
-        tempo: 92,
-        tempoText: "92 BPM",
+        tempo: 88,
+        tempoText: "88 BPM",
         key: "D 小调",
-        texture: "磁带颗粒",
-        noiseLevel: 0.24,
-        padDepth: 0.68,
+        texture: "柔和颗粒",
+        noiseLevel: 0.16,
+        padDepth: 0.62,
         activityLevel: 0.56,
-        stressLevel: 0.49,
+        stressLevel: 0.44,
         recoveryScore: 0.58,
         metrics: [
             BodyMetric(
                 title: "心率",
                 value: "96 次/分",
-                detail: "示例值偏快，低鼓会更紧一些。",
+                detail: "演示值略快，鼓点会更紧一些。",
                 icon: "heart.fill",
                 tint: .pink
             ),
             BodyMetric(
                 title: "步数",
                 value: "8420",
-                detail: "活动量不错，hi-hat 会更活跃。",
+                detail: "活动量不错，切分会更活跃。",
                 icon: "figure.walk",
                 tint: .green
             ),
             BodyMetric(
                 title: "睡眠",
                 value: "7.1 小时",
-                detail: "恢复中，铺底会更长更稳。",
+                detail: "恢复中，铺底会更平稳。",
                 icon: "bed.double.fill",
-                tint: .blue
+                tint: .indigo
             ),
             BodyMetric(
                 title: "HRV",
                 value: "34 ms",
-                detail: "压力略高，会带出一些颗粒底噪。",
+                detail: "略有压力，底噪会轻微抬高。",
                 icon: "waveform.path.ecg",
                 tint: .orange
             )
         ],
-        insightText: "演示数据下，App 会合成一段偏稳的 Lo-Fi 节奏。真机授权后，它会改成今天的实际心率、步数、睡眠和 HRV。",
-        playbackNote: "现在的声音会按 16 步节拍循环，并根据步数和 HRV 调整鼓组密度、底噪和铺底长度。"
+        insightText: "当前是演示数据。真机授权后，这里会切换成当天的真实心率、步数、睡眠和 HRV。",
+        playbackNote: "节拍以 16 步循环推进，并根据活动量、恢复度和 HRV 调整鼓组密度与纹理。"
     )
 
     static func live(_ snapshot: HealthSnapshot) -> BiometricsProfile {
-        let normalizedHeartRate = normalize(snapshot.heartRate, lower: 55, upper: 125)
-        let activityLevel = normalize(snapshot.stepCount, lower: 1500, upper: 13000)
-        let sleepScore = normalize(snapshot.sleepHours, lower: 4.5, upper: 8.5)
-        let hrvScore = normalize(snapshot.hrv, lower: 20, upper: 70)
+        let heartRate = snapshot.heartRate ?? 74
+        let stepCount = snapshot.stepCount ?? 4200
+        let sleepHours = snapshot.sleepHours ?? 6.6
+        let hrv = snapshot.hrv ?? 38
+
+        let normalizedHeartRate = normalize(heartRate, lower: 55, upper: 125)
+        let activityLevel = normalize(stepCount, lower: 1500, upper: 13000)
+        let sleepScore = normalize(sleepHours, lower: 4.5, upper: 8.5)
+        let hrvScore = normalize(hrv, lower: 20, upper: 70)
         let stressLevel = 1 - hrvScore * 0.72 - sleepScore * 0.18 + normalizedHeartRate * 0.16
         let clampedStress = clamp(stressLevel)
         let recoveryScore = clamp((sleepScore * 0.58) + (hrvScore * 0.42))
         let tempo = 78 + (normalizedHeartRate * 22) + (activityLevel * 18)
-        let noiseLevel = 0.08 + (clampedStress * 0.28)
-        let padDepth = 0.28 + (recoveryScore * 0.58)
+        let noiseLevel = 0.08 + (clampedStress * 0.24)
+        let padDepth = 0.32 + (recoveryScore * 0.52)
 
         let key: String
         if recoveryScore > 0.72 {
@@ -452,15 +693,23 @@ struct BiometricsProfile: Equatable {
 
         let texture: String
         if clampedStress > 0.7 {
-            texture = "颗粒粗粝"
+            texture = "紧绷颗粒"
         } else if activityLevel > 0.72 {
-            texture = "磁带摆动"
+            texture = "轻摆磁带"
         } else {
-            texture = "柔和噪声"
+            texture = "柔和空气感"
         }
 
-        let insightText = "这段节律来自今天的真实数据：\(Int(snapshot.stepCount)) 步、平均心率 \(Int(snapshot.heartRate.rounded())) 次/分、近 24 小时睡眠 \(String(format: "%.1f", snapshot.sleepHours)) 小时、HRV \(Int(snapshot.hrv.rounded())) ms。"
-        let playbackNote = "心率会推高 BPM，步数会增加切分节奏，睡眠会延长铺底，HRV 偏低时底噪会更明显。"
+        let insightText = [
+            snapshot.stepCount.map { "步数 \(Int($0.rounded()))" },
+            snapshot.heartRate.map { "心率 \(Int($0.rounded())) 次/分" },
+            snapshot.sleepHours.map { "睡眠 \(String(format: "%.1f", $0)) 小时" },
+            snapshot.hrv.map { "HRV \(Int($0.rounded())) ms" }
+        ]
+        .compactMap { $0 }
+        .joined(separator: "，")
+
+        let summaryText = insightText.isEmpty ? "已连接 Apple 健康。" : "当前节律来自真实数据：\(insightText)。"
 
         return BiometricsProfile(
             tempo: tempo,
@@ -475,35 +724,35 @@ struct BiometricsProfile: Equatable {
             metrics: [
                 BodyMetric(
                     title: "心率",
-                    value: "\(Int(snapshot.heartRate.rounded())) 次/分",
-                    detail: normalizedHeartRate > 0.62 ? "节拍会被明显推快。" : "节拍会保持偏稳的推进。",
+                    value: snapshot.heartRate.map { "\(Int($0.rounded())) 次/分" } ?? "未获取",
+                    detail: snapshot.heartRate == nil ? "没有读到心率，先用默认节拍估算。" : (normalizedHeartRate > 0.62 ? "节拍会被明显推快。" : "节拍会保持偏稳推进。"),
                     icon: "heart.fill",
                     tint: .pink
                 ),
                 BodyMetric(
                     title: "步数",
-                    value: "\(Int(snapshot.stepCount.rounded()))",
-                    detail: activityLevel > 0.65 ? "步数高，切分和 hi-hat 会更密。" : "活动量适中，鼓组会更克制。",
+                    value: snapshot.stepCount.map { "\(Int($0.rounded()))" } ?? "未获取",
+                    detail: snapshot.stepCount == nil ? "没有读到步数，鼓组密度保持中性。" : (activityLevel > 0.65 ? "切分和 hi-hat 会更密。" : "鼓组会更克制一些。"),
                     icon: "figure.walk",
                     tint: .green
                 ),
                 BodyMetric(
                     title: "睡眠",
-                    value: String(format: "%.1f 小时", snapshot.sleepHours),
-                    detail: recoveryScore > 0.65 ? "恢复不错，铺底会更圆润。" : "恢复一般，铺底会短一些。",
+                    value: snapshot.sleepHours.map { String(format: "%.1f 小时", $0) } ?? "未获取",
+                    detail: snapshot.sleepHours == nil ? "睡眠缺失时，铺底按中性恢复度处理。" : (recoveryScore > 0.65 ? "铺底会更圆润更长。" : "铺底会更短一些。"),
                     icon: "bed.double.fill",
-                    tint: .blue
+                    tint: .indigo
                 ),
                 BodyMetric(
                     title: "HRV",
-                    value: "\(Int(snapshot.hrv.rounded())) ms",
-                    detail: clampedStress > 0.62 ? "HRV 偏低，底噪会更粗糙。" : "HRV 还不错，纹理会更松弛。",
+                    value: snapshot.hrv.map { "\(Int($0.rounded())) ms" } ?? "未获取",
+                    detail: snapshot.hrv == nil ? "没拿到 HRV，底噪会保持适中。" : (clampedStress > 0.62 ? "底噪会更明显。" : "纹理会更松弛。"),
                     icon: "waveform.path.ecg",
                     tint: .orange
                 )
             ],
-            insightText: insightText,
-            playbackNote: playbackNote
+            insightText: summaryText,
+            playbackNote: "心率推高 BPM，步数增加切分，睡眠决定铺底长度，HRV 偏低时纹理会更紧。"
         )
     }
 
