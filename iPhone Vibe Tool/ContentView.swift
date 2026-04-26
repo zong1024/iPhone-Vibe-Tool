@@ -16,6 +16,8 @@ struct ContentView: View {
 
     private let brandBlue = Color(red: 0.33, green: 0.60, blue: 0.98)
     private let brandWarm = Color(red: 0.95, green: 0.70, blue: 0.45)
+    private let canvasColor = Color(red: 0.97, green: 0.98, blue: 1.00)
+    private let mistColor = Color(red: 0.93, green: 0.96, blue: 1.00)
 
     private let gridColumns = [
         GridItem(.flexible(), spacing: 12),
@@ -56,22 +58,25 @@ struct ContentView: View {
 
     private var backgroundLayer: some View {
         ZStack {
-            Color(uiColor: .systemGroupedBackground)
+            canvasColor
                 .ignoresSafeArea()
 
             Circle()
-                .fill(brandBlue.opacity(0.10))
-                .frame(width: 320, height: 320)
+                .fill(brandBlue.opacity(0.16))
+                .frame(width: 340, height: 340)
+                .blur(radius: 8)
                 .offset(x: 150, y: -250)
 
             Circle()
-                .fill(brandWarm.opacity(0.10))
-                .frame(width: 280, height: 280)
+                .fill(brandWarm.opacity(0.14))
+                .frame(width: 300, height: 300)
+                .blur(radius: 10)
                 .offset(x: -160, y: 300)
 
             Circle()
-                .fill(Color.white.opacity(0.55))
-                .frame(width: 220, height: 220)
+                .fill(mistColor.opacity(0.95))
+                .frame(width: 250, height: 250)
+                .blur(radius: 12)
                 .offset(x: 120, y: 160)
         }
     }
@@ -137,7 +142,7 @@ struct ContentView: View {
             .padding(.vertical, 6)
             .background(
                 Capsule()
-                    .fill(store.isUsingLiveData ? brandBlue.opacity(0.12) : Color.white.opacity(0.55))
+                    .fill(store.isUsingLiveData ? brandBlue.opacity(0.14) : Color.white.opacity(0.8))
             )
     }
 
@@ -298,7 +303,7 @@ struct ContentView: View {
             .padding(.vertical, 7)
             .background(
                 Capsule()
-                    .fill(Color.white.opacity(0.55))
+                    .fill(Color.white.opacity(0.82))
             )
     }
 }
@@ -414,11 +419,11 @@ private struct SecondaryButtonStyle: ButtonStyle {
             .padding(.vertical, 14)
             .background(
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .fill(Color.white.opacity(configuration.isPressed ? 0.68 : 0.56))
+                    .fill(Color.white.opacity(configuration.isPressed ? 0.9 : 0.82))
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .stroke(Color.white.opacity(0.55), lineWidth: 1)
+                    .stroke(Color.white.opacity(0.92), lineWidth: 1)
             )
             .scaleEffect(configuration.isPressed ? 0.985 : 1)
     }
@@ -431,7 +436,11 @@ private extension View {
                 .fill(.ultraThinMaterial)
                 .overlay(
                     RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                        .stroke(Color.white.opacity(0.38), lineWidth: 1)
+                        .fill(Color.white.opacity(0.36))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                        .stroke(Color.white.opacity(0.88), lineWidth: 1)
                 )
         )
     }
@@ -439,4 +448,5 @@ private extension View {
 
 #Preview {
     ContentView()
+        .preferredColorScheme(.light)
 }

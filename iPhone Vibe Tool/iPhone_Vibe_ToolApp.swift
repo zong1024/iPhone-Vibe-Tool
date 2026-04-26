@@ -13,6 +13,7 @@ struct SympatheticVibrationApp: App {
         WindowGroup {
             ContentView()
                 .tint(Color(red: 0.33, green: 0.60, blue: 0.98))
+                .preferredColorScheme(.light)
         }
     }
 }
