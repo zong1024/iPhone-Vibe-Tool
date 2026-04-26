@@ -8,176 +8,123 @@
 import SwiftUI
 
 struct ContentView: View {
-    @State private var isPlaying = true
+    private let profile = BiometricsProfile.sample
 
-    private let profile = SynthProfile.sample
-    private let columns = [
-        GridItem(.flexible(), spacing: 14),
-        GridItem(.flexible(), spacing: 14)
-    ]
+    @StateObject private var synth = BiometricSynthEngine(profile: .sample)
 
     var body: some View {
-        ZStack {
-            background
-
+        NavigationStack {
             ScrollView(.vertical, showsIndicators: false) {
-                VStack(alignment: .leading, spacing: 24) {
-                    heroCard
+                VStack(alignment: .leading, spacing: 20) {
+                    headerCard
                     metricsSection
-                    synthSection
+                    playerSection
                     mappingSection
-                    resonanceSection
+                    footerNote
                 }
-                .padding(.horizontal, 20)
-                .padding(.vertical, 28)
+                .padding(20)
             }
+            .background(Color(uiColor: .systemGroupedBackground))
+            .navigationTitle("生物节律合成器")
+            .navigationBarTitleDisplayMode(.inline)
+        }
+        .onDisappear {
+            synth.stop()
         }
     }
 
-    private var background: some View {
-        ZStack {
-            LinearGradient(
-                colors: [
-                    Color(red: 0.06, green: 0.08, blue: 0.16),
-                    Color(red: 0.08, green: 0.14, blue: 0.23),
-                    Color(red: 0.18, green: 0.11, blue: 0.16)
-                ],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-
-            Circle()
-                .fill(Color.cyan.opacity(0.28))
-                .frame(width: 280, height: 280)
-                .blur(radius: 30)
-                .offset(x: 130, y: -260)
-
-            Circle()
-                .fill(Color.orange.opacity(0.18))
-                .frame(width: 240, height: 240)
-                .blur(radius: 24)
-                .offset(x: -140, y: 220)
-        }
-        .ignoresSafeArea()
-    }
-
-    private var heroCard: some View {
-        VStack(alignment: .leading, spacing: 18) {
+    private var headerCard: some View {
+        VStack(alignment: .leading, spacing: 16) {
             HStack(alignment: .top) {
-                VStack(alignment: .leading, spacing: 8) {
+                VStack(alignment: .leading, spacing: 6) {
                     Text("Biometric Synth")
-                        .font(.system(size: 34, weight: .bold, design: .serif))
-                        .foregroundStyle(Color.white)
+                        .font(.title2.weight(.semibold))
+                        .foregroundStyle(Color.primary)
 
-                    Text("生物节律合成器")
-                        .font(.headline)
-                        .foregroundStyle(Color.white.opacity(0.78))
-
-                    Text("Your phone becomes a resonance box for your body, turning fatigue, pulse, and recovery into a midnight Lo-Fi score.")
+                    Text("把当天的身体状态转成一段可听的低保真节律。")
                         .font(.subheadline)
-                        .foregroundStyle(Color.white.opacity(0.75))
-                        .fixedSize(horizontal: false, vertical: true)
+                        .foregroundStyle(Color.secondary)
                 }
 
-                Spacer(minLength: 16)
+                Spacer(minLength: 12)
 
-                Button {
-                    withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                        isPlaying.toggle()
-                    }
-                } label: {
-                    Image(systemName: isPlaying ? "pause.fill" : "play.fill")
-                        .font(.title3.weight(.bold))
-                        .foregroundStyle(Color(red: 0.04, green: 0.08, blue: 0.14))
-                        .frame(width: 56, height: 56)
-                        .background(
-                            Circle()
-                                .fill(
-                                    LinearGradient(
-                                        colors: [Color.mint, Color.cyan],
-                                        startPoint: .topLeading,
-                                        endPoint: .bottomTrailing
-                                    )
-                                )
-                        )
-                        .shadow(color: Color.cyan.opacity(0.45), radius: 18, y: 8)
-                }
-                .buttonStyle(.plain)
+                statusBadge
             }
 
-            HStack(spacing: 10) {
-                CapsuleTag(title: isPlaying ? "Live Session" : "Paused", tint: .mint)
-                CapsuleTag(title: "Recovery Bias 68%", tint: .orange)
-                CapsuleTag(title: "Lo-Fi Output", tint: .pink)
-            }
+            Divider()
 
-            LoFiWaveformView(isPlaying: isPlaying)
-                .frame(height: 92)
-
-            HStack {
-                statLine(value: profile.tempo, label: "tempo")
-                Spacer()
-                statLine(value: profile.key, label: "key")
-                Spacer()
-                statLine(value: profile.texture, label: "texture")
+            HStack(spacing: 24) {
+                summaryItem(title: "节拍", value: profile.tempoText)
+                summaryItem(title: "调式", value: profile.key)
+                summaryItem(title: "质感", value: profile.texture)
             }
         }
-        .padding(22)
+        .padding(20)
         .background(cardBackground)
     }
 
-    private var metricsSection: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            sectionLabel("Body Signals")
+    private var statusBadge: some View {
+        Text(synth.isPlaying ? "播放中" : "未播放")
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(synth.isPlaying ? Color.green : Color.secondary)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(
+                Capsule()
+                    .fill(synth.isPlaying ? Color.green.opacity(0.14) : Color.secondary.opacity(0.12))
+            )
+    }
 
-            LazyVGrid(columns: columns, spacing: 14) {
+    private var metricsSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            sectionTitle("今日身体数据")
+
+            VStack(spacing: 12) {
                 ForEach(profile.metrics) { metric in
-                    MetricCard(metric: metric)
+                    MetricRow(metric: metric)
                 }
             }
         }
     }
 
-    private var synthSection: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            sectionLabel("Today's Mix")
+    private var playerSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            sectionTitle("声音输出")
 
             VStack(alignment: .leading, spacing: 16) {
-                HStack(alignment: .top) {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("April 27 Session")
-                            .font(.headline)
-                            .foregroundStyle(Color.white)
+                Text("当前是一个简化版示例音轨：根据心率驱动节拍，根据压力提升底噪，根据睡眠恢复度拉长铺底。")
+                    .font(.subheadline)
+                    .foregroundStyle(Color.secondary)
 
-                        Text("Fatigue stayed elevated after noon, so the engine pulled the groove downward into a softer, dustier pocket.")
-                            .font(.subheadline)
-                            .foregroundStyle(Color.white.opacity(0.72))
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-
-                    Spacer()
-
-                    Text("Lo-Fi")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(Color(red: 0.11, green: 0.08, blue: 0.12))
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
-                        .background(
-                            Capsule()
-                                .fill(Color.white.opacity(0.92))
-                        )
-                }
+                WaveformStrip(isPlaying: synth.isPlaying)
+                    .frame(height: 56)
 
                 HStack(spacing: 12) {
-                    MixDial(title: "Drift", value: "42%")
-                    MixDial(title: "Warmth", value: "81%")
-                    MixDial(title: "Focus", value: "53%")
+                    controlChip(title: "鼓点 \(profile.tempoText)")
+                    controlChip(title: "底噪 \(profile.noiseLabel)")
+                    controlChip(title: "铺底 \(profile.padLabel)")
                 }
 
-                VStack(spacing: 10) {
-                    InsightRow(label: "Pulse acceleration", detail: "Pushes kick pattern into tighter 1/8 note motion")
-                    InsightRow(label: "Lower HRV", detail: "Adds granular hiss and narrows stereo width")
-                    InsightRow(label: "Deep sleep rebound", detail: "Lets pads bloom longer with slower filter sweep")
+                Button {
+                    synth.togglePlayback()
+                } label: {
+                    HStack {
+                        Image(systemName: synth.isPlaying ? "pause.fill" : "play.fill")
+                        Text(synth.isPlaying ? "暂停声音" : "播放今日节律")
+                    }
+                    .font(.headline)
+                    .foregroundStyle(Color.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 14)
+                    .background(Color(red: 0.10, green: 0.44, blue: 0.39))
+                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                }
+                .buttonStyle(.plain)
+
+                if let errorText = synth.errorText {
+                    Text(errorText)
+                        .font(.footnote)
+                        .foregroundStyle(Color.red)
                 }
             }
             .padding(20)
@@ -186,321 +133,223 @@ struct ContentView: View {
     }
 
     private var mappingSection: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            sectionLabel("Body -> Sound Map")
+        VStack(alignment: .leading, spacing: 12) {
+            sectionTitle("映射关系")
 
-            VStack(spacing: 12) {
-                MappingRow(source: "Heart Rate", target: "Tempo", result: "96 BPM when pulse spikes")
-                MappingRow(source: "Steps", target: "Groove Density", result: "More motion, busier hats")
-                MappingRow(source: "Sleep Depth", target: "Pad Length", result: "Recovered days get longer tails")
-                MappingRow(source: "Stress Load", target: "Noise Texture", result: "Pressure adds grit and tape dust")
+            VStack(spacing: 10) {
+                MappingRow(source: "心率", result: "节拍更紧，鼓点更密")
+                MappingRow(source: "步数", result: "高频打击更活跃")
+                MappingRow(source: "睡眠恢复", result: "铺底更长、更稳")
+                MappingRow(source: "压力负荷", result: "颗粒底噪更明显")
             }
-            .padding(18)
-            .background(cardBackground)
         }
     }
 
-    private var resonanceSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            sectionLabel("Resonance Note")
+    private var footerNote: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            sectionTitle("说明")
 
-            Text("Your phone stops acting like a black hole for attention and starts listening back. The soundtrack is not chosen for you; it is coaxed out of you.")
-                .font(.body)
-                .foregroundStyle(Color.white.opacity(0.78))
-                .lineSpacing(4)
-                .padding(20)
+            Text("现在展示的是示例数据和本地生成的基础音色。下一步如果接入 HealthKit，就可以把心率、步数和睡眠数据实时映射到声音参数。")
+                .font(.footnote)
+                .foregroundStyle(Color.secondary)
+                .lineSpacing(3)
+                .padding(16)
                 .background(cardBackground)
         }
     }
 
-    private func sectionLabel(_ title: String) -> some View {
-        Text(title.uppercased())
-            .font(.caption.weight(.bold))
-            .tracking(2)
-            .foregroundStyle(Color.white.opacity(0.64))
+    private func sectionTitle(_ text: String) -> some View {
+        Text(text)
+            .font(.headline)
+            .foregroundStyle(Color.primary)
     }
 
-    private func statLine(value: String, label: String) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
+    private func summaryItem(title: String, value: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title)
+                .font(.caption)
+                .foregroundStyle(Color.secondary)
             Text(value)
-                .font(.title3.weight(.semibold))
-                .foregroundStyle(Color.white)
-            Text(label.uppercased())
-                .font(.caption2.weight(.bold))
-                .tracking(1.5)
-                .foregroundStyle(Color.white.opacity(0.54))
+                .font(.headline)
+                .foregroundStyle(Color.primary)
         }
+    }
+
+    private func controlChip(title: String) -> some View {
+        Text(title)
+            .font(.caption.weight(.medium))
+            .foregroundStyle(Color.primary)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .background(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(Color(uiColor: .secondarySystemGroupedBackground))
+            )
     }
 
     private var cardBackground: some View {
-        RoundedRectangle(cornerRadius: 28, style: .continuous)
-            .fill(Color.white.opacity(0.08))
-            .overlay(
-                RoundedRectangle(cornerRadius: 28, style: .continuous)
-                    .stroke(Color.white.opacity(0.12), lineWidth: 1)
-            )
+        RoundedRectangle(cornerRadius: 18, style: .continuous)
+            .fill(Color(uiColor: .systemBackground))
+            .shadow(color: Color.black.opacity(0.04), radius: 14, y: 6)
     }
 }
 
-private struct CapsuleTag: View {
-    let title: String
-    let tint: Color
+private struct MetricRow: View {
+    let metric: BodyMetric
 
     var body: some View {
-        Text(title)
-            .font(.caption.weight(.semibold))
-            .foregroundStyle(Color.white)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 7)
-            .background(
-                Capsule()
-                    .fill(tint.opacity(0.2))
-                    .overlay(
-                        Capsule()
-                            .stroke(tint.opacity(0.45), lineWidth: 1)
-                    )
-            )
-    }
-}
-
-private struct MetricCard: View {
-    let metric: HealthMetric
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack {
-                Image(systemName: metric.icon)
-                    .font(.headline.weight(.semibold))
-                    .foregroundStyle(metric.tint)
-                    .frame(width: 34, height: 34)
-                    .background(
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .fill(metric.tint.opacity(0.18))
-                    )
-
-                Spacer()
-
-                Text(metric.trend)
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(Color.white.opacity(0.72))
-            }
+        HStack(spacing: 14) {
+            Image(systemName: metric.icon)
+                .font(.headline)
+                .foregroundStyle(metric.tint)
+                .frame(width: 36, height: 36)
+                .background(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(metric.tint.opacity(0.14))
+                )
 
             VStack(alignment: .leading, spacing: 4) {
-                Text(metric.value)
-                    .font(.title2.weight(.bold))
-                    .foregroundStyle(Color.white)
+                HStack {
+                    Text(metric.title)
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(Color.primary)
 
-                Text(metric.title)
-                    .font(.subheadline.weight(.medium))
-                    .foregroundStyle(Color.white.opacity(0.78))
+                    Spacer()
 
-                Text(metric.impact)
+                    Text(metric.value)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(Color.primary)
+                }
+
+                Text(metric.detail)
                     .font(.caption)
-                    .foregroundStyle(Color.white.opacity(0.56))
-                    .fixedSize(horizontal: false, vertical: true)
+                    .foregroundStyle(Color.secondary)
             }
         }
-        .padding(18)
-        .frame(maxWidth: .infinity, minHeight: 158, alignment: .topLeading)
+        .padding(16)
         .background(
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .fill(Color.white.opacity(0.07))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 24, style: .continuous)
-                        .stroke(Color.white.opacity(0.1), lineWidth: 1)
-                )
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(Color(uiColor: .systemBackground))
         )
-    }
-}
-
-private struct MixDial: View {
-    let title: String
-    let value: String
-
-    var body: some View {
-        VStack(spacing: 10) {
-            ZStack {
-                Circle()
-                    .stroke(Color.white.opacity(0.14), lineWidth: 8)
-
-                Circle()
-                    .trim(from: 0.0, to: 0.72)
-                    .stroke(
-                        LinearGradient(
-                            colors: [Color.orange, Color.pink],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        ),
-                        style: StrokeStyle(lineWidth: 8, lineCap: .round)
-                    )
-                    .rotationEffect(.degrees(-90))
-
-                Text(value)
-                    .font(.headline.weight(.semibold))
-                    .foregroundStyle(Color.white)
-            }
-            .frame(width: 86, height: 86)
-
-            Text(title)
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(Color.white.opacity(0.7))
-        }
-        .frame(maxWidth: .infinity)
-    }
-}
-
-private struct InsightRow: View {
-    let label: String
-    let detail: String
-
-    var body: some View {
-        HStack(alignment: .top, spacing: 12) {
-            Circle()
-                .fill(Color.mint)
-                .frame(width: 8, height: 8)
-                .padding(.top, 5)
-
-            VStack(alignment: .leading, spacing: 3) {
-                Text(label)
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(Color.white)
-
-                Text(detail)
-                    .font(.caption)
-                    .foregroundStyle(Color.white.opacity(0.62))
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-
-            Spacer()
-        }
     }
 }
 
 private struct MappingRow: View {
     let source: String
-    let target: String
     let result: String
 
     var body: some View {
-        HStack(alignment: .top, spacing: 14) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(source)
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(Color.white)
-                Text("Input")
-                    .font(.caption2.weight(.bold))
-                    .tracking(1.2)
-                    .foregroundStyle(Color.white.opacity(0.45))
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
+        HStack(alignment: .top, spacing: 12) {
+            Text(source)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(Color.primary)
+                .frame(width: 64, alignment: .leading)
 
             Image(systemName: "arrow.right")
-                .foregroundStyle(Color.white.opacity(0.45))
+                .font(.caption.weight(.bold))
+                .foregroundStyle(Color.secondary)
                 .padding(.top, 3)
 
-            VStack(alignment: .leading, spacing: 2) {
-                Text(target)
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(Color.white)
-                Text(result)
-                    .font(.caption)
-                    .foregroundStyle(Color.white.opacity(0.6))
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
+            Text(result)
+                .font(.subheadline)
+                .foregroundStyle(Color.secondary)
+
+            Spacer()
         }
-        .padding(14)
+        .padding(16)
         .background(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(Color.black.opacity(0.14))
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(Color(uiColor: .systemBackground))
         )
     }
 }
 
-private struct LoFiWaveformView: View {
+private struct WaveformStrip: View {
     let isPlaying: Bool
 
-    private let bars: [CGFloat] = [0.34, 0.56, 0.42, 0.8, 0.62, 0.48, 0.9, 0.52, 0.68, 0.4, 0.72, 0.58, 0.84, 0.38, 0.66]
+    private let bars: [CGFloat] = [0.18, 0.34, 0.52, 0.26, 0.48, 0.72, 0.39, 0.61, 0.29, 0.57, 0.41, 0.66]
 
     var body: some View {
-        HStack(alignment: .center, spacing: 8) {
+        HStack(alignment: .center, spacing: 6) {
             ForEach(Array(bars.enumerated()), id: \.offset) { index, value in
                 Capsule()
-                    .fill(
-                        LinearGradient(
-                            colors: [Color.cyan.opacity(0.9), Color.mint.opacity(0.45)],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                    )
+                    .fill(isPlaying ? Color(red: 0.10, green: 0.44, blue: 0.39) : Color.gray.opacity(0.35))
                     .frame(maxWidth: .infinity)
-                    .frame(height: barHeight(for: value, index: index))
-                    .animation(
-                        .easeInOut(duration: 0.9).delay(Double(index) * 0.03),
-                        value: isPlaying
-                    )
+                    .frame(height: currentHeight(base: value, index: index))
+                    .animation(.easeInOut(duration: 0.8).delay(Double(index) * 0.02), value: isPlaying)
             }
         }
-        .padding(.vertical, 8)
+        .padding(.vertical, 2)
     }
 
-    private func barHeight(for value: CGFloat, index: Int) -> CGFloat {
-        let playingHeight = 20 + (value * 56)
-        let pausedHeight: CGFloat = index.isMultiple(of: 3) ? 34 : 18
-        return isPlaying ? playingHeight : pausedHeight
+    private func currentHeight(base: CGFloat, index: Int) -> CGFloat {
+        if isPlaying {
+            return 14 + (base * 44)
+        }
+
+        return index.isMultiple(of: 2) ? 12 : 20
     }
 }
 
-private struct HealthMetric: Identifiable {
+struct BodyMetric: Identifiable {
     let id = UUID()
     let title: String
     let value: String
-    let trend: String
-    let impact: String
+    let detail: String
     let icon: String
     let tint: Color
 }
 
-private struct SynthProfile {
-    let tempo: String
+struct BiometricsProfile {
+    let tempo: Double
+    let tempoText: String
     let key: String
     let texture: String
-    let metrics: [HealthMetric]
+    let noiseLevel: Double
+    let padDepth: Double
+    let metrics: [BodyMetric]
 
-    static let sample = SynthProfile(
-        tempo: "88 BPM",
-        key: "D Minor",
-        texture: "Dusty Tape",
+    var noiseLabel: String {
+        noiseLevel > 0.22 ? "偏强" : "偏轻"
+    }
+
+    var padLabel: String {
+        padDepth > 0.70 ? "拉长" : "适中"
+    }
+
+    static let sample = BiometricsProfile(
+        tempo: 88,
+        tempoText: "88 BPM",
+        key: "D 小调",
+        texture: "磁带颗粒",
+        noiseLevel: 0.26,
+        padDepth: 0.78,
         metrics: [
-            HealthMetric(
-                title: "Heart Rate",
-                value: "96 bpm",
-                trend: "Restless",
-                impact: "Faster pulse tightens the groove.",
+            BodyMetric(
+                title: "心率",
+                value: "96 次/分",
+                detail: "偏快，节拍会更紧一些。",
                 icon: "heart.fill",
                 tint: .pink
             ),
-            HealthMetric(
-                title: "Steps",
-                value: "8,420",
-                trend: "Active",
-                impact: "Movement adds brighter hats.",
+            BodyMetric(
+                title: "步数",
+                value: "8420",
+                detail: "活动量不错，打击声会更活跃。",
                 icon: "figure.walk",
-                tint: .mint
+                tint: .green
             ),
-            HealthMetric(
-                title: "Sleep Depth",
+            BodyMetric(
+                title: "睡眠恢复",
                 value: "71%",
-                trend: "Recovering",
-                impact: "Deeper rest lengthens pad tails.",
+                detail: "恢复中，铺底会更长更稳。",
                 icon: "bed.double.fill",
-                tint: .cyan
+                tint: .blue
             ),
-            HealthMetric(
-                title: "Stress Load",
-                value: "High",
-                trend: "Textured",
-                impact: "Pressure introduces grain and hiss.",
+            BodyMetric(
+                title: "压力负荷",
+                value: "较高",
+                detail: "会抬高底噪和颗粒感。",
                 icon: "waveform.path.ecg",
                 tint: .orange
             )
@@ -510,5 +359,4 @@ private struct SynthProfile {
 
 #Preview {
     ContentView()
-        .preferredColorScheme(.dark)
 }
