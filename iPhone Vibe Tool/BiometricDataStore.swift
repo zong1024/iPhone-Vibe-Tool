@@ -11,15 +11,15 @@ import SwiftUI
 @MainActor
 final class BiometricDataStore: ObservableObject {
     @Published private(set) var profile: BiometricsProfile = .sample
-    @Published private(set) var sourceLabel = "演示数据"
-    @Published private(set) var statusText = "正在显示一组演示节律。"
-    @Published private(set) var detailText = "真机授权后，节拍、纹理和铺底会改由今天的 Apple 健康数据驱动。"
+    @Published private(set) var sourceLabel = "待同步"
+    @Published private(set) var statusText = "等待今天的身体信号。"
+    @Published private(set) var detailText = "连接 Apple 健康后，节拍、纹理和铺底会根据你的身体状态自然变化。"
     @Published private(set) var errorText: String?
     @Published private(set) var isLoading = false
     @Published private(set) var guidance: [String] = [
-        "请在真机上运行，模拟器通常无法提供健康数据。",
-        "第一次进入时允许读取“心率、步数、睡眠、心率变异性”。",
-        "如果仍然没有数据，请确认健康 App 里本身已经有样本。"
+        "第一次进入时允许读取心率、步数、睡眠和 HRV。",
+        "如果没有佩戴 Apple Watch，心率和 HRV 可能会暂时缺失。",
+        "健康 App 里已有样本后，再次同步会更完整。"
     ]
 
     var isUsingLiveData: Bool {
@@ -54,17 +54,17 @@ final class BiometricDataStore: ObservableObject {
         case .success(let snapshot):
             profile = .live(snapshot)
             sourceLabel = "Apple 健康"
-            statusText = "已同步健康数据，更新于 \(timeFormatter.string(from: .now))。"
+            statusText = "已同步今天的身体信号，更新于 \(timeFormatter.string(from: .now))。"
             detailText = profile.insightText
             errorText = snapshot.missingDataNote
             guidance = [
                 "心率和 HRV 往往来自 Apple Watch，未佩戴时可能会缺失。",
                 "睡眠通常需要睡眠追踪或 Apple Watch 数据才更完整。",
-                "点“刷新”可以在新样本写入健康后重新生成节律。"
+                "轻点“同步健康”可以在新样本写入后重新生成声场。"
             ]
         case .fallback(let state):
             profile = .sample
-            sourceLabel = "演示数据"
+            sourceLabel = "待同步"
             statusText = state.title
             detailText = state.detail
             errorText = state.errorText
@@ -101,7 +101,7 @@ struct HealthSnapshot {
             return nil
         }
 
-        return "以下数据暂时缺失：\(missing.joined(separator: "、"))。节律已用已有项目生成。"
+        return "以下数据暂时缺失：\(missing.joined(separator: "、"))。声场已根据目前可用的数据生成。"
     }
 
     var missingMetrics: [String] {
@@ -136,12 +136,12 @@ final class HealthKitManager {
             return .fallback(
                 HealthFallbackState(
                     title: "当前设备不支持 Apple 健康。",
-                    detail: "HealthKit 在不支持的设备、部分受限环境或模拟器里会不可用，所以先切回演示节律。",
+                    detail: "这台设备暂时无法提供健康数据，因此先使用默认声场。",
                     errorText: "HealthKit 当前不可用。",
                     guidance: [
-                        "请改用 iPhone 真机测试。",
-                        "如果是真机，检查是否被企业或家长控制限制了健康数据。",
-                        "健康数据可用后，再点“刷新”。"
+                        "请在支持 Apple 健康的 iPhone 上使用。",
+                        "如果是受限设备，检查系统是否禁止了健康数据。",
+                        "恢复可用后，再次同步即可。"
                     ]
                 )
             )
@@ -155,12 +155,12 @@ final class HealthKitManager {
                 return .fallback(
                     HealthFallbackState(
                         title: "健康权限尚未完成授权。",
-                        detail: "你可以先听演示节律；一旦允许读取健康数据，这个页面就会切到当天的真实状态。",
+                        detail: "允许读取健康数据后，App 会把今天的身体状态直接转成声场。",
                         errorText: "没有完成 HealthKit 授权。",
                         guidance: [
-                            "重新点一次“刷新数据”触发授权。",
+                            "重新点一次“同步健康”触发授权。",
                             "如果系统不再弹窗，请到 健康 App -> 资料 -> App 与服务 里开启本 App。",
-                            "至少允许步数或心率后，就能生成半真实节律。"
+                            "至少允许步数或心率后，就能开始生成个性化声场。"
                         ]
                     )
                 )
@@ -182,12 +182,12 @@ final class HealthKitManager {
                 return .fallback(
                     HealthFallbackState(
                         title: "已连上 Apple 健康，但还没有读到可用样本。",
-                        detail: "这通常不是代码错误，而是健康库里目前没有对应数据，或者今天还没产生新样本。",
+                        detail: "健康数据库里暂时还没有今天可用的样本，声场会先保持默认状态。",
                         errorText: "未获取到心率、步数、睡眠或 HRV 样本。",
                         guidance: [
-                            "步数通常最容易拿到，走动后再回来刷新一次。",
+                            "步数通常最容易拿到，稍微活动后再同步一次。",
                             "心率、HRV 和睡眠更依赖 Apple Watch 或其他健康来源。",
-                            "若你刚刚授权，等几秒后再试一次。"
+                            "如果你刚刚授权，等几秒后再试一次。"
                         ]
                     )
                 )
@@ -200,10 +200,10 @@ final class HealthKitManager {
             return .fallback(
                 HealthFallbackState(
                     title: "读取 Apple 健康时出了点问题。",
-                    detail: "我先回退到演示数据，方便继续调声音和界面。",
+                    detail: "我先保留默认声场，避免页面完全中断。",
                     errorText: "读取 Apple 健康失败：\(error.localizedDescription)",
                     guidance: [
-                        "确认手机已解锁后再刷新。",
+                        "确认手机已解锁后再同步。",
                         "在健康 App 中检查这个 App 的读取权限。",
                         "如果问题持续，把这里的报错文字发给我，我继续对着修。"
                     ]
@@ -454,7 +454,7 @@ final class HealthKitManager {
                 detail: "Apple 官方文档说明，设备锁定时 HealthKit 数据库会暂时不可访问。",
                 errorText: "健康数据库当前不可访问，请解锁手机后重试。",
                 guidance: [
-                    "先解锁手机，再回到 App 点“刷新数据”。",
+                    "先解锁手机，再回到 App 点“同步健康”。",
                     "保持 App 在前台重新读取一次。",
                     "如果是刚安装的新 App，先完成一次权限授权。"
                 ]
@@ -462,12 +462,12 @@ final class HealthKitManager {
         case .errorHealthDataRestricted:
             return HealthFallbackState(
                 title: "这台设备限制了 Apple 健康访问。",
-                detail: "可能是企业设备策略或系统限制导致，App 只能先使用演示数据。",
+                detail: "可能是企业设备策略或系统限制导致，健康同步暂时不可用。",
                 errorText: "HealthKit 被系统限制。",
                 guidance: [
                     "检查是否是公司设备或受管设备。",
                     "到 设置 -> 屏幕使用时间 或 MDM 限制中确认健康权限。",
-                    "若无法解除限制，只能保留演示模式。"
+                    "若无法解除限制，App 会继续使用默认声场。"
                 ]
             )
         case .errorHealthDataUnavailable:
@@ -476,18 +476,18 @@ final class HealthKitManager {
                 detail: "Apple 文档说明，不支持 HealthKit 的设备会直接返回不可用。",
                 errorText: "HealthKit 在当前设备不可用。",
                 guidance: [
-                    "请使用 iPhone 真机测试。",
-                    "iPad、模拟器或受限环境里经常会失败。",
+                    "请在支持 Apple 健康的 iPhone 上使用。",
+                    "iPad 或受限环境里可能无法同步。",
                     "切到真机后重新授权。"
                 ]
             )
         case .errorUserCanceled:
             return HealthFallbackState(
                 title: "你取消了健康权限授权。",
-                detail: "所以我先回到演示节律，不影响你继续看 UI 和听声音。",
+                detail: "在权限重新开启前，App 会先保持默认声场。",
                 errorText: "HealthKit 授权已取消。",
                 guidance: [
-                    "点“刷新数据”再触发一次授权。",
+                    "点“同步健康”再触发一次授权。",
                     "或到 健康 App -> 资料 -> App 与服务 手动开启权限。",
                     "至少允许步数后，这页就能开始用真实数据。"
                 ]
@@ -495,7 +495,7 @@ final class HealthKitManager {
         default:
             return HealthFallbackState(
                 title: "读取 Apple 健康时出了点问题。",
-                detail: "先切回演示数据，避免页面完全不可用。",
+                detail: "先保留默认声场，避免页面完全不可用。",
                 errorText: "HealthKit 错误：\(error.localizedDescription)",
                 guidance: [
                     "确认手机已解锁。",
@@ -635,7 +635,7 @@ struct BiometricsProfile: Equatable {
             BodyMetric(
                 title: "心率",
                 value: "96 次/分",
-                detail: "演示值略快，鼓点会更紧一些。",
+                detail: "当前节拍略快，鼓点会更紧一些。",
                 icon: "heart.fill",
                 tint: .pink
             ),
@@ -661,7 +661,7 @@ struct BiometricsProfile: Equatable {
                 tint: .orange
             )
         ],
-        insightText: "当前是演示数据。真机授权后，这里会切换成当天的真实心率、步数、睡眠和 HRV。",
+        insightText: "在健康数据完成同步前，App 会先用一组温和的默认声场开始播放。",
         playbackNote: "节拍以 16 步循环推进，并根据活动量、恢复度和 HRV 调整鼓组密度与纹理。"
     )
 

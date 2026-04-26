@@ -8,10 +8,11 @@
 import SwiftUI
 
 @main
-struct iPhone_Vibe_ToolApp: App {
+struct SympatheticVibrationApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .tint(Color(red: 0.33, green: 0.60, blue: 0.98))
         }
     }
 }

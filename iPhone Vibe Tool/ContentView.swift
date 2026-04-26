@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import UIKit
 
 struct ContentView: View {
     @Environment(\.openURL) private var openURL
@@ -13,23 +14,33 @@ struct ContentView: View {
     @StateObject private var store = BiometricDataStore()
     @StateObject private var synth = BiometricSynthEngine(profile: .sample)
 
+    private let brandBlue = Color(red: 0.33, green: 0.60, blue: 0.98)
+    private let brandWarm = Color(red: 0.95, green: 0.70, blue: 0.45)
+
+    private let gridColumns = [
+        GridItem(.flexible(), spacing: 12),
+        GridItem(.flexible(), spacing: 12),
+    ]
+
     var body: some View {
         NavigationStack {
-            ScrollView(.vertical, showsIndicators: false) {
-                VStack(alignment: .leading, spacing: 28) {
-                    heroSection
-                    metricsSection
-                    playerSection
-                    mappingSection
-                    helpSection
+            ZStack {
+                backgroundLayer
+
+                ScrollView(.vertical, showsIndicators: false) {
+                    VStack(alignment: .leading, spacing: 24) {
+                        heroSection
+                        signalSection
+                        playerSection
+                        soundMapSection
+                        healthSection
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.top, 18)
+                    .padding(.bottom, 34)
                 }
-                .padding(.horizontal, 20)
-                .padding(.top, 20)
-                .padding(.bottom, 32)
             }
-            .background(Color(uiColor: .systemGroupedBackground))
-            .navigationTitle("共振")
-            .navigationBarTitleDisplayMode(.large)
+            .toolbar(.hidden, for: .navigationBar)
         }
         .task {
             await store.loadIfNeeded()
@@ -43,66 +54,100 @@ struct ContentView: View {
         }
     }
 
+    private var backgroundLayer: some View {
+        ZStack {
+            Color(uiColor: .systemGroupedBackground)
+                .ignoresSafeArea()
+
+            Circle()
+                .fill(brandBlue.opacity(0.10))
+                .frame(width: 320, height: 320)
+                .offset(x: 150, y: -250)
+
+            Circle()
+                .fill(brandWarm.opacity(0.10))
+                .frame(width: 280, height: 280)
+                .offset(x: -160, y: 300)
+
+            Circle()
+                .fill(Color.white.opacity(0.55))
+                .frame(width: 220, height: 220)
+                .offset(x: 120, y: 160)
+        }
+    }
+
     private var heroSection: some View {
         VStack(alignment: .leading, spacing: 18) {
-            HStack(alignment: .top) {
+            HStack(alignment: .top, spacing: 14) {
+                Image("BrandMark")
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: 72, height: 72)
+                    .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 22, style: .continuous)
+                            .stroke(Color.white.opacity(0.35), lineWidth: 1)
+                    )
+
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("身体数据，变成今天的节律。")
+                    Text("Sympathetic Vibration")
                         .font(.title2.weight(.semibold))
                         .foregroundStyle(Color.primary)
 
-                    Text(store.statusText)
+                    Text("让身体状态，轻轻推动今天的声场。")
                         .font(.subheadline)
                         .foregroundStyle(Color.secondary)
                 }
 
-                Spacer(minLength: 16)
+                Spacer(minLength: 12)
 
                 sourcePill
             }
 
-            HStack(spacing: 14) {
-                heroStat(title: "节拍", value: store.profile.tempoText)
-                heroStat(title: "调式", value: store.profile.key)
-                heroStat(title: "纹理", value: store.profile.texture)
-            }
-
-            Divider()
+            Text(store.statusText)
+                .font(.headline)
+                .foregroundStyle(Color.primary)
 
             Text(store.detailText)
                 .font(.footnote)
                 .foregroundStyle(Color.secondary)
                 .lineSpacing(3)
 
+            HStack(spacing: 12) {
+                heroStat(title: "Tempo", value: store.profile.tempoText)
+                heroStat(title: "Key", value: store.profile.key)
+                heroStat(title: "Texture", value: store.profile.texture)
+            }
+
             if let errorText = store.errorText {
-                Label(errorText, systemImage: "exclamationmark.circle")
+                Label(errorText, systemImage: "info.circle")
                     .font(.footnote)
-                    .foregroundStyle(Color.orange)
+                    .foregroundStyle(Color.secondary)
             }
         }
         .padding(22)
-        .background(panelBackground)
+        .glassCard(cornerRadius: 30)
     }
 
     private var sourcePill: some View {
         Text(store.sourceLabel)
             .font(.caption.weight(.semibold))
-            .foregroundStyle(store.isUsingLiveData ? Color.blue : Color.secondary)
+            .foregroundStyle(store.isUsingLiveData ? brandBlue : Color.secondary)
             .padding(.horizontal, 10)
             .padding(.vertical, 6)
             .background(
                 Capsule()
-                    .fill(store.isUsingLiveData ? Color.blue.opacity(0.12) : Color.secondary.opacity(0.10))
+                    .fill(store.isUsingLiveData ? brandBlue.opacity(0.12) : Color.white.opacity(0.55))
             )
     }
 
-    private var metricsSection: some View {
+    private var signalSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            sectionHeader("身体数据")
+            sectionTitle("Signals")
 
-            VStack(spacing: 10) {
+            LazyVGrid(columns: gridColumns, spacing: 12) {
                 ForEach(store.profile.metrics) { metric in
-                    MetricRow(metric: metric)
+                    SignalCard(metric: metric)
                 }
             }
         }
@@ -110,32 +155,39 @@ struct ContentView: View {
 
     private var playerSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            sectionHeader("声音输出")
+            sectionTitle("Listening")
 
             VStack(alignment: .leading, spacing: 18) {
-                WaveformStrip(levels: store.profile.waveformLevels, isPlaying: synth.isPlaying)
-                    .frame(height: 56)
+                HStack {
+                    Text("Today’s field")
+                        .font(.headline)
+                        .foregroundStyle(Color.primary)
+
+                    Spacer()
+
+                    HStack(spacing: 8) {
+                        propertyPill("鼓组 \(store.profile.grooveLabel)")
+                        propertyPill("铺底 \(store.profile.padLabel)")
+                    }
+                }
+
+                WaveformStrip(levels: store.profile.waveformLevels, isPlaying: synth.isPlaying, tint: brandBlue)
+                    .frame(height: 58)
 
                 Text(store.profile.playbackNote)
                     .font(.subheadline)
                     .foregroundStyle(Color.secondary)
                     .lineSpacing(3)
 
-                HStack(spacing: 8) {
-                    parameterPill("鼓组 \(store.profile.grooveLabel)")
-                    parameterPill("底噪 \(store.profile.noiseLabel)")
-                    parameterPill("铺底 \(store.profile.padLabel)")
-                }
-
                 HStack(spacing: 12) {
                     Button {
                         synth.togglePlayback()
                     } label: {
-                        Label(synth.isPlaying ? "暂停" : "播放", systemImage: synth.isPlaying ? "pause.fill" : "play.fill")
+                        Label(synth.isPlaying ? "暂停声场" : "播放声场", systemImage: synth.isPlaying ? "pause.fill" : "play.fill")
                             .font(.headline)
                             .frame(maxWidth: .infinity)
                     }
-                    .buttonStyle(PrimaryActionButtonStyle())
+                    .buttonStyle(PrimaryButtonStyle(fill: brandBlue))
 
                     Button {
                         Task {
@@ -145,14 +197,15 @@ struct ContentView: View {
                         Group {
                             if store.isLoading {
                                 ProgressView()
+                                    .tint(brandBlue)
                             } else {
-                                Text("刷新")
+                                Label("同步健康", systemImage: "arrow.clockwise")
                             }
                         }
                         .font(.headline)
                         .frame(maxWidth: .infinity)
                     }
-                    .buttonStyle(SecondaryActionButtonStyle())
+                    .buttonStyle(SecondaryButtonStyle(tint: brandBlue))
                     .disabled(store.isLoading)
                 }
 
@@ -162,38 +215,38 @@ struct ContentView: View {
                         .foregroundStyle(Color.red)
                 }
             }
-            .padding(20)
-            .background(panelBackground)
+            .padding(22)
+            .glassCard(cornerRadius: 28)
         }
     }
 
-    private var mappingSection: some View {
+    private var soundMapSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            sectionHeader("映射逻辑")
+            sectionTitle("Sound Map")
 
             VStack(spacing: 0) {
-                MappingRow(source: "心率", result: "决定 BPM 和低鼓推进。")
-                Divider().padding(.leading, 58)
-                MappingRow(source: "步数", result: "决定切分密度和 hi-hat 活跃度。")
-                Divider().padding(.leading, 58)
-                MappingRow(source: "睡眠", result: "决定铺底长度与和声稳定度。")
-                Divider().padding(.leading, 58)
-                MappingRow(source: "HRV", result: "决定噪声感和整体张力。")
+                MappingRow(source: "心率", result: "推动 BPM 和鼓点推进。")
+                Divider().padding(.leading, 68)
+                MappingRow(source: "步数", result: "增加切分与高频律动。")
+                Divider().padding(.leading, 68)
+                MappingRow(source: "睡眠", result: "延长铺底并让和声更稳定。")
+                Divider().padding(.leading, 68)
+                MappingRow(source: "HRV", result: "改变颗粒感与整体张力。")
             }
-            .background(panelBackground)
+            .glassCard(cornerRadius: 26)
         }
     }
 
-    private var helpSection: some View {
+    private var healthSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            sectionHeader("Apple 健康读取说明")
+            sectionTitle("Apple 健康")
 
-            VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 14) {
                 ForEach(store.guidance, id: \.self) { item in
                     HStack(alignment: .top, spacing: 10) {
-                        Image(systemName: "circle.fill")
-                            .font(.system(size: 5))
-                            .foregroundStyle(Color.secondary)
+                        Circle()
+                            .fill(brandBlue.opacity(0.95))
+                            .frame(width: 6, height: 6)
                             .padding(.top, 7)
 
                         Text(item)
@@ -209,15 +262,14 @@ struct ContentView: View {
                     }
                 }
                 .font(.footnote.weight(.semibold))
-                .foregroundStyle(Color.accentColor)
-                .padding(.top, 2)
+                .foregroundStyle(brandBlue)
             }
-            .padding(20)
-            .background(panelBackground)
+            .padding(22)
+            .glassCard(cornerRadius: 26)
         }
     }
 
-    private func sectionHeader(_ title: String) -> some View {
+    private func sectionTitle(_ title: String) -> some View {
         Text(title)
             .font(.headline)
             .foregroundStyle(Color.primary)
@@ -233,68 +285,59 @@ struct ContentView: View {
                 .font(.title3.weight(.semibold))
                 .foregroundStyle(Color.primary)
                 .lineLimit(1)
-                .minimumScaleFactor(0.8)
+                .minimumScaleFactor(0.82)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    private func parameterPill(_ title: String) -> some View {
-        Text(title)
+    private func propertyPill(_ text: String) -> some View {
+        Text(text)
             .font(.caption.weight(.medium))
             .foregroundStyle(Color.secondary)
             .padding(.horizontal, 10)
-            .padding(.vertical, 8)
+            .padding(.vertical, 7)
             .background(
                 Capsule()
-                    .fill(Color(uiColor: .secondarySystemGroupedBackground))
+                    .fill(Color.white.opacity(0.55))
             )
-    }
-
-    private var panelBackground: some View {
-        RoundedRectangle(cornerRadius: 22, style: .continuous)
-            .fill(Color(uiColor: .systemBackground))
     }
 }
 
-private struct MetricRow: View {
+private struct SignalCard: View {
     let metric: BodyMetric
 
     var body: some View {
-        HStack(spacing: 14) {
-            Image(systemName: metric.icon)
-                .font(.headline)
-                .foregroundStyle(metric.tint)
-                .frame(width: 38, height: 38)
-                .background(
-                    Circle()
-                        .fill(metric.tint.opacity(0.12))
-                )
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Image(systemName: metric.icon)
+                    .font(.headline)
+                    .foregroundStyle(metric.tint)
+                    .frame(width: 34, height: 34)
+                    .background(
+                        Circle()
+                            .fill(metric.tint.opacity(0.12))
+                    )
 
-            VStack(alignment: .leading, spacing: 4) {
-                HStack(alignment: .firstTextBaseline) {
-                    Text(metric.title)
-                        .font(.subheadline.weight(.medium))
-                        .foregroundStyle(Color.primary)
-
-                    Spacer()
-
-                    Text(metric.value)
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(Color.primary)
-                }
-
-                Text(metric.detail)
-                    .font(.caption)
-                    .foregroundStyle(Color.secondary)
-                    .lineSpacing(2)
+                Spacer()
             }
+
+            Text(metric.title)
+                .font(.subheadline.weight(.medium))
+                .foregroundStyle(Color.secondary)
+
+            Text(metric.value)
+                .font(.title3.weight(.semibold))
+                .foregroundStyle(Color.primary)
+
+            Text(metric.detail)
+                .font(.caption)
+                .foregroundStyle(Color.secondary)
+                .lineSpacing(2)
+                .fixedSize(horizontal: false, vertical: true)
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 14)
-        .background(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(Color(uiColor: .systemBackground))
-        )
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(18)
+        .glassCard(cornerRadius: 24)
     }
 }
 
@@ -307,15 +350,16 @@ private struct MappingRow: View {
             Text(source)
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(Color.primary)
-                .frame(width: 44, alignment: .leading)
+                .frame(width: 56, alignment: .leading)
 
             Text(result)
                 .font(.subheadline)
                 .foregroundStyle(Color.secondary)
+                .lineSpacing(2)
 
             Spacer()
         }
-        .padding(.horizontal, 18)
+        .padding(.horizontal, 20)
         .padding(.vertical, 16)
     }
 }
@@ -323,51 +367,73 @@ private struct MappingRow: View {
 private struct WaveformStrip: View {
     let levels: [CGFloat]
     let isPlaying: Bool
+    let tint: Color
 
     var body: some View {
         HStack(alignment: .center, spacing: 6) {
             ForEach(Array(levels.enumerated()), id: \.offset) { index, value in
                 Capsule()
-                    .fill(isPlaying ? Color.accentColor : Color.secondary.opacity(0.25))
+                    .fill(isPlaying ? tint : Color.secondary.opacity(0.22))
                     .frame(maxWidth: .infinity)
                     .frame(height: currentHeight(base: value, index: index))
-                    .animation(.easeInOut(duration: 0.65).delay(Double(index) * 0.018), value: isPlaying)
+                    .animation(.easeInOut(duration: 0.65).delay(Double(index) * 0.02), value: isPlaying)
             }
         }
     }
 
     private func currentHeight(base: CGFloat, index: Int) -> CGFloat {
         if isPlaying {
-            return 14 + (base * 38)
+            return 14 + (base * 40)
         }
 
         return index.isMultiple(of: 2) ? 12 : 18
     }
 }
 
-private struct PrimaryActionButtonStyle: ButtonStyle {
+private struct PrimaryButtonStyle: ButtonStyle {
+    let fill: Color
+
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .foregroundStyle(Color.white)
             .padding(.vertical, 14)
             .background(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(Color.accentColor.opacity(configuration.isPressed ? 0.82 : 1))
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .fill(fill.opacity(configuration.isPressed ? 0.82 : 1))
             )
-            .scaleEffect(configuration.isPressed ? 0.98 : 1)
+            .scaleEffect(configuration.isPressed ? 0.985 : 1)
     }
 }
 
-private struct SecondaryActionButtonStyle: ButtonStyle {
+private struct SecondaryButtonStyle: ButtonStyle {
+    let tint: Color
+
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .foregroundStyle(Color.accentColor)
+            .foregroundStyle(tint)
             .padding(.vertical, 14)
             .background(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(Color.accentColor.opacity(configuration.isPressed ? 0.16 : 0.10))
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .fill(Color.white.opacity(configuration.isPressed ? 0.68 : 0.56))
             )
-            .scaleEffect(configuration.isPressed ? 0.98 : 1)
+            .overlay(
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .stroke(Color.white.opacity(0.55), lineWidth: 1)
+            )
+            .scaleEffect(configuration.isPressed ? 0.985 : 1)
+    }
+}
+
+private extension View {
+    func glassCard(cornerRadius: CGFloat) -> some View {
+        background(
+            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                .fill(.ultraThinMaterial)
+                .overlay(
+                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                        .stroke(Color.white.opacity(0.38), lineWidth: 1)
+                )
+        )
     }
 }
 

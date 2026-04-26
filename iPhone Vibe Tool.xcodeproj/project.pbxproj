@@ -12,21 +12,21 @@
 			containerPortal = D4906F412F9E7A2500BF9643 /* Project object */;
 			proxyType = 1;
 			remoteGlobalIDString = D4906F482F9E7A2500BF9643;
-			remoteInfo = "iPhone Vibe Tool";
+			remoteInfo = "Sympathetic Vibration";
 		};
 		D4906F642F9E7A2D00BF9643 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = D4906F412F9E7A2500BF9643 /* Project object */;
 			proxyType = 1;
 			remoteGlobalIDString = D4906F482F9E7A2500BF9643;
-			remoteInfo = "iPhone Vibe Tool";
+			remoteInfo = "Sympathetic Vibration";
 		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
-		D4906F492F9E7A2500BF9643 /* iPhone Vibe Tool.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "iPhone Vibe Tool.app"; sourceTree = BUILT_PRODUCTS_DIR; };
-		D4906F592F9E7A2D00BF9643 /* iPhone Vibe ToolTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "iPhone Vibe ToolTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
-		D4906F632F9E7A2D00BF9643 /* iPhone Vibe ToolUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "iPhone Vibe ToolUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
+		D4906F492F9E7A2500BF9643 /* Sympathetic Vibration.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Sympathetic Vibration.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		D4906F592F9E7A2D00BF9643 /* Sympathetic VibrationTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Sympathetic VibrationTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
+		D4906F632F9E7A2D00BF9643 /* Sympathetic VibrationUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Sympathetic VibrationUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -85,9 +85,9 @@
 		D4906F4A2F9E7A2500BF9643 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				D4906F492F9E7A2500BF9643 /* iPhone Vibe Tool.app */,
-				D4906F592F9E7A2D00BF9643 /* iPhone Vibe ToolTests.xctest */,
-				D4906F632F9E7A2D00BF9643 /* iPhone Vibe ToolUITests.xctest */,
+				D4906F492F9E7A2500BF9643 /* Sympathetic Vibration.app */,
+				D4906F592F9E7A2D00BF9643 /* Sympathetic VibrationTests.xctest */,
+				D4906F632F9E7A2D00BF9643 /* Sympathetic VibrationUITests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -95,7 +95,7 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		D4906F482F9E7A2500BF9643 /* iPhone Vibe Tool */ = {
+		D4906F482F9E7A2500BF9643 /* Sympathetic Vibration */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = D4906F6D2F9E7A2D00BF9643 /* Build configuration list for PBXNativeTarget "iPhone Vibe Tool" */;
 			buildPhases = (
@@ -110,14 +110,14 @@
 			fileSystemSynchronizedGroups = (
 				D4906F4B2F9E7A2500BF9643 /* iPhone Vibe Tool */,
 			);
-			name = "iPhone Vibe Tool";
+			name = "Sympathetic Vibration";
 			packageProductDependencies = (
 			);
-			productName = "iPhone Vibe Tool";
-			productReference = D4906F492F9E7A2500BF9643 /* iPhone Vibe Tool.app */;
+			productName = "Sympathetic Vibration";
+			productReference = D4906F492F9E7A2500BF9643 /* Sympathetic Vibration.app */;
 			productType = "com.apple.product-type.application";
 		};
-		D4906F582F9E7A2D00BF9643 /* iPhone Vibe ToolTests */ = {
+		D4906F582F9E7A2D00BF9643 /* Sympathetic VibrationTests */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = D4906F702F9E7A2D00BF9643 /* Build configuration list for PBXNativeTarget "iPhone Vibe ToolTests" */;
 			buildPhases = (
@@ -133,14 +133,14 @@
 			fileSystemSynchronizedGroups = (
 				D4906F5C2F9E7A2D00BF9643 /* iPhone Vibe ToolTests */,
 			);
-			name = "iPhone Vibe ToolTests";
+			name = "Sympathetic VibrationTests";
 			packageProductDependencies = (
 			);
-			productName = "iPhone Vibe ToolTests";
-			productReference = D4906F592F9E7A2D00BF9643 /* iPhone Vibe ToolTests.xctest */;
+			productName = "Sympathetic VibrationTests";
+			productReference = D4906F592F9E7A2D00BF9643 /* Sympathetic VibrationTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
 		};
-		D4906F622F9E7A2D00BF9643 /* iPhone Vibe ToolUITests */ = {
+		D4906F622F9E7A2D00BF9643 /* Sympathetic VibrationUITests */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = D4906F732F9E7A2D00BF9643 /* Build configuration list for PBXNativeTarget "iPhone Vibe ToolUITests" */;
 			buildPhases = (
@@ -156,11 +156,11 @@
 			fileSystemSynchronizedGroups = (
 				D4906F662F9E7A2D00BF9643 /* iPhone Vibe ToolUITests */,
 			);
-			name = "iPhone Vibe ToolUITests";
+			name = "Sympathetic VibrationUITests";
 			packageProductDependencies = (
 			);
-			productName = "iPhone Vibe ToolUITests";
-			productReference = D4906F632F9E7A2D00BF9643 /* iPhone Vibe ToolUITests.xctest */;
+			productName = "Sympathetic VibrationUITests";
+			productReference = D4906F632F9E7A2D00BF9643 /* Sympathetic VibrationUITests.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
 		};
 /* End PBXNativeTarget section */
@@ -205,9 +205,9 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				D4906F482F9E7A2500BF9643 /* iPhone Vibe Tool */,
-				D4906F582F9E7A2D00BF9643 /* iPhone Vibe ToolTests */,
-				D4906F622F9E7A2D00BF9643 /* iPhone Vibe ToolUITests */,
+				D4906F482F9E7A2500BF9643 /* Sympathetic Vibration */,
+				D4906F582F9E7A2D00BF9643 /* Sympathetic VibrationTests */,
+				D4906F622F9E7A2D00BF9643 /* Sympathetic VibrationUITests */,
 			);
 		};
 /* End PBXProject section */
@@ -405,6 +405,7 @@
 				DEVELOPMENT_TEAM = 4HSZZ2ASM9;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = "Sympathetic Vibration";
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "读取你的心率、步数、睡眠和 HRV，用来生成当天的节律。";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -417,7 +418,7 @@
 				);
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "zongrui.iPhone-Vibe-Tool";
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				PRODUCT_NAME = "Sympathetic Vibration";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -436,6 +437,7 @@
 				DEVELOPMENT_TEAM = 4HSZZ2ASM9;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = "Sympathetic Vibration";
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "读取你的心率、步数、睡眠和 HRV，用来生成当天的节律。";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -448,7 +450,7 @@
 				);
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "zongrui.iPhone-Vibe-Tool";
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				PRODUCT_NAME = "Sympathetic Vibration";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -465,11 +467,11 @@
 				IPHONEOS_DEPLOYMENT_TARGET = 18.2;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "zongrui.iPhone-Vibe-ToolTests";
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				PRODUCT_NAME = "Sympathetic VibrationTests";
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/iPhone Vibe Tool.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/iPhone Vibe Tool";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Sympathetic Vibration.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Sympathetic Vibration";
 			};
 			name = Debug;
 		};
@@ -483,11 +485,11 @@
 				IPHONEOS_DEPLOYMENT_TARGET = 18.2;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "zongrui.iPhone-Vibe-ToolTests";
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				PRODUCT_NAME = "Sympathetic VibrationTests";
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/iPhone Vibe Tool.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/iPhone Vibe Tool";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Sympathetic Vibration.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Sympathetic Vibration";
 			};
 			name = Release;
 		};
@@ -499,11 +501,11 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "zongrui.iPhone-Vibe-ToolUITests";
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				PRODUCT_NAME = "Sympathetic VibrationUITests";
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
-				TEST_TARGET_NAME = "iPhone Vibe Tool";
+				TEST_TARGET_NAME = "Sympathetic Vibration";
 			};
 			name = Debug;
 		};
@@ -515,11 +517,11 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "zongrui.iPhone-Vibe-ToolUITests";
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				PRODUCT_NAME = "Sympathetic VibrationUITests";
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
-				TEST_TARGET_NAME = "iPhone Vibe Tool";
+				TEST_TARGET_NAME = "Sympathetic Vibration";
 			};
 			name = Release;
 		};
