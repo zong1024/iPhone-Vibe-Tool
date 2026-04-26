@@ -446,7 +446,7 @@ private struct LoFiWaveformView: View {
 
     private func barHeight(for value: CGFloat, index: Int) -> CGFloat {
         let playingHeight = 20 + (value * 56)
-        let pausedHeight = index.isMultiple(of: 3) ? 34 : 18
+        let pausedHeight: CGFloat = index.isMultiple(of: 3) ? 34 : 18
         return isPlaying ? playingHeight : pausedHeight
     }
 }
