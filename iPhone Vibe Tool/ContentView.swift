@@ -16,8 +16,8 @@ struct ContentView: View {
 
     private let brandBlue = Color(red: 0.33, green: 0.60, blue: 0.98)
     private let brandWarm = Color(red: 0.95, green: 0.70, blue: 0.45)
-    private let canvasColor = Color(red: 0.97, green: 0.98, blue: 1.00)
-    private let mistColor = Color(red: 0.93, green: 0.96, blue: 1.00)
+    private let canvasColor = Color(red: 0.94, green: 0.97, blue: 1.00)
+    private let mistColor = Color(red: 0.89, green: 0.94, blue: 1.00)
 
     private let gridColumns = [
         GridItem(.flexible(), spacing: 12),
@@ -62,21 +62,21 @@ struct ContentView: View {
                 .ignoresSafeArea()
 
             Circle()
-                .fill(brandBlue.opacity(0.16))
+                .fill(brandBlue.opacity(0.13))
                 .frame(width: 340, height: 340)
-                .blur(radius: 8)
+                .blur(radius: 18)
                 .offset(x: 150, y: -250)
 
             Circle()
-                .fill(brandWarm.opacity(0.14))
+                .fill(brandWarm.opacity(0.10))
                 .frame(width: 300, height: 300)
-                .blur(radius: 10)
+                .blur(radius: 20)
                 .offset(x: -160, y: 300)
 
             Circle()
-                .fill(mistColor.opacity(0.95))
+                .fill(mistColor.opacity(0.82))
                 .frame(width: 250, height: 250)
-                .blur(radius: 12)
+                .blur(radius: 22)
                 .offset(x: 120, y: 160)
         }
     }
@@ -176,8 +176,18 @@ struct ContentView: View {
                     }
                 }
 
-                WaveformStrip(levels: store.profile.waveformLevels, isPlaying: synth.isPlaying, tint: brandBlue)
-                    .frame(height: 58)
+                WaveformStrip(levels: synth.visualizerLevels, isPlaying: synth.isPlaying, tint: brandBlue)
+                    .frame(height: 66)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 12)
+                    .background(
+                        RoundedRectangle(cornerRadius: 22, style: .continuous)
+                            .fill(Color.white.opacity(0.72))
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 22, style: .continuous)
+                            .stroke(brandBlue.opacity(0.14), lineWidth: 1)
+                    )
 
                 Text(store.profile.playbackNote)
                     .font(.subheadline)
@@ -301,9 +311,10 @@ struct ContentView: View {
             .foregroundStyle(Color.secondary)
             .padding(.horizontal, 10)
             .padding(.vertical, 7)
-            .background(
-                Capsule()
-                    .fill(Color.white.opacity(0.82))
+                .background(
+                    Capsule()
+                        .fill(Color.white.opacity(0.82))
+                        .shadow(color: Color.black.opacity(0.03), radius: 10, x: 0, y: 6)
             )
     }
 }
@@ -378,20 +389,26 @@ private struct WaveformStrip: View {
         HStack(alignment: .center, spacing: 6) {
             ForEach(Array(levels.enumerated()), id: \.offset) { index, value in
                 Capsule()
-                    .fill(isPlaying ? tint : Color.secondary.opacity(0.22))
+                    .fill(isPlaying ? tint.opacity(index.isMultiple(of: 3) ? 0.96 : 0.82) : Color.secondary.opacity(0.22))
                     .frame(maxWidth: .infinity)
                     .frame(height: currentHeight(base: value, index: index))
-                    .animation(.easeInOut(duration: 0.65).delay(Double(index) * 0.02), value: isPlaying)
+                    .animation(.linear(duration: 0.08), value: value)
             }
+        }
+        .overlay(alignment: .center) {
+            Rectangle()
+                .fill(tint.opacity(isPlaying ? 0.14 : 0.08))
+                .frame(height: 1)
         }
     }
 
     private func currentHeight(base: CGFloat, index: Int) -> CGFloat {
         if isPlaying {
-            return 14 + (base * 40)
+            let bias: CGFloat = index.isMultiple(of: 3) ? 6 : 0
+            return 10 + (base * 44) + bias
         }
 
-        return index.isMultiple(of: 2) ? 12 : 18
+        return index.isMultiple(of: 2) ? 10 : 16
     }
 }
 
@@ -436,12 +453,14 @@ private extension View {
                 .fill(.ultraThinMaterial)
                 .overlay(
                     RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                        .fill(Color.white.opacity(0.36))
+                        .fill(Color.white.opacity(0.56))
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                        .stroke(Color.white.opacity(0.88), lineWidth: 1)
+                        .stroke(Color.white.opacity(0.96), lineWidth: 1)
                 )
+                .shadow(color: Color.black.opacity(0.06), radius: 22, x: 0, y: 12)
+                .shadow(color: Color.white.opacity(0.45), radius: 1, x: 0, y: 1)
         )
     }
 }

@@ -662,7 +662,7 @@ struct BiometricsProfile: Equatable {
             )
         ],
         insightText: "在健康数据完成同步前，App 会先用一组温和的默认声场开始播放。",
-        playbackNote: "节拍以 16 步循环推进，并根据活动量、恢复度和 HRV 调整鼓组密度与纹理。"
+        playbackNote: "声场会每秒重组一次，沿着今天的身体曲线持续改写鼓组、铺底和颗粒纹理。"
     )
 
     static func live(_ snapshot: HealthSnapshot) -> BiometricsProfile {
@@ -752,7 +752,7 @@ struct BiometricsProfile: Equatable {
                 )
             ],
             insightText: summaryText,
-            playbackNote: "心率推高 BPM，步数增加切分，睡眠决定铺底长度，HRV 偏低时纹理会更紧。"
+            playbackNote: "播放时会每秒参考今天的身体状态重新编排，心率、步数、睡眠和 HRV 会持续改写节奏张力。"
         )
     }
 
