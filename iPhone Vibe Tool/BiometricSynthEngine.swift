@@ -37,6 +37,7 @@ final class BiometricSynthEngine: ObservableObject {
 
     private var kickEnvelope = 0.0
     private var snareEnvelope = 0.0
+    private var clapEnvelope = 0.0
     private var hatEnvelope = 0.0
     private var bassEnvelope = 0.0
 
@@ -82,6 +83,7 @@ final class BiometricSynthEngine: ObservableObject {
         isPlaying = false
         kickEnvelope = 0
         snareEnvelope = 0
+        clapEnvelope = 0
         hatEnvelope = 0
         bassEnvelope = 0
         stateLock.lock()
@@ -129,10 +131,11 @@ final class BiometricSynthEngine: ObservableObject {
                 let bass = self.nextBassSample(sampleRate: sampleRate, state: state, scene: scene)
                 let kick = self.nextKickSample(sampleRate: sampleRate, scene: scene)
                 let snare = self.nextSnareSample(sampleRate: sampleRate, state: state, scene: scene)
+                let clap = self.nextClapSample(scene: scene)
                 let hat = self.nextHatSample(state: state, scene: scene)
                 let roomNoise = self.nextNoiseBed(state: state, scene: scene)
 
-                let sampleValue = self.clamped(pad + bass + kick + snare + hat + roomNoise)
+                let sampleValue = self.clamped(pad + bass + kick + snare + clap + hat + roomNoise)
                 peak = max(peak, abs(sampleValue))
 
                 for buffer in bufferList {
@@ -182,6 +185,10 @@ final class BiometricSynthEngine: ObservableObject {
             snareTonePhase = 0
         }
 
+        if scene.clapPattern[step] {
+            clapEnvelope = max(clapEnvelope, 1.0)
+        }
+
         if scene.hatPattern[step] {
             hatEnvelope = max(hatEnvelope, 0.58 + scene.motion * 0.42)
         }
@@ -217,7 +224,8 @@ final class BiometricSynthEngine: ObservableObject {
 
         let triangle = asin(sin(padPhase)) * (2.0 / Double.pi)
         let pad = (triangle * 0.058) + (sin(padDetunePhase) * 0.032)
-        return pad * scene.padGain * (0.62 + state.padDepth * 0.52)
+        let ducking = 1.0 - ((kickEnvelope * scene.sidechainDepth) + (clapEnvelope * 0.12))
+        return pad * scene.padGain * (0.62 + state.padDepth * 0.52) * max(0.42, ducking)
     }
 
     private func nextBassSample(sampleRate: Double, state: RenderState, scene: LiveScene) -> Double {
@@ -231,7 +239,9 @@ final class BiometricSynthEngine: ObservableObject {
             bassPhase -= 2.0 * Double.pi
         }
 
-        let sample = sin(bassPhase) * bassEnvelope * scene.bassGain
+        let sine = sin(bassPhase)
+        let harmonic = sin(bassPhase * 2.0) * scene.bassHarmonic
+        let sample = tanh((sine + harmonic) * scene.bassDrive) * bassEnvelope * scene.bassGain
         bassEnvelope *= 0.9978 - (scene.motion * 0.0008)
         return sample
     }
@@ -247,7 +257,9 @@ final class BiometricSynthEngine: ObservableObject {
             kickPhase -= 2.0 * Double.pi
         }
 
-        let sample = sin(kickPhase) * kickEnvelope * scene.kickGain
+        let body = sin(kickPhase)
+        let click = nextWhiteNoise() * kickEnvelope * scene.kickClick
+        let sample = tanh((body * scene.kickDrive) + click) * kickEnvelope * scene.kickGain
         kickEnvelope *= 0.9942
         return sample
     }
@@ -270,6 +282,20 @@ final class BiometricSynthEngine: ObservableObject {
         return sample
     }
 
+    private func nextClapSample(scene: LiveScene) -> Double {
+        guard clapEnvelope > 0.0008 else {
+            return 0
+        }
+
+        let burst = nextWhiteNoise()
+        let body = sin(snareTonePhase * 1.65) * 0.18
+        let flutter = sin(snareTonePhase * 3.4) * 0.08
+        let sample = tanh((burst * 0.72) + body + flutter) * clapEnvelope * scene.clapGain
+
+        clapEnvelope *= scene.clapDecay
+        return sample
+    }
+
     private func nextHatSample(state: RenderState, scene: LiveScene) -> Double {
         guard hatEnvelope > 0.0008 else {
             return 0
@@ -279,8 +305,9 @@ final class BiometricSynthEngine: ObservableObject {
         let highPassed = white - (hatNoiseMemory * 0.78)
         hatNoiseMemory = white
 
-        let sample = highPassed * hatEnvelope * scene.hatGain * scene.hatBrightness
-        hatEnvelope *= 0.972 - (state.stressLevel * 0.004)
+        let accented = highPassed + (nextWhiteNoise() * 0.14)
+        let sample = accented * hatEnvelope * scene.hatGain * scene.hatBrightness
+        hatEnvelope *= scene.hatDecay - (state.stressLevel * 0.003)
         return sample
     }
 
@@ -308,6 +335,7 @@ final class BiometricSynthEngine: ObservableObject {
         currentScene = state.scene(forSecond: 0)
         kickEnvelope = 0
         snareEnvelope = 0
+        clapEnvelope = 0
         hatEnvelope = 0
         bassEnvelope = 0
         padPhase = 0
@@ -338,6 +366,7 @@ final class BiometricSynthEngine: ObservableObject {
             peak * 1.35,
             kickEnvelope * 0.9,
             snareEnvelope * 0.72,
+            clapEnvelope * 0.66,
             bassEnvelope * 0.5,
             hatEnvelope * 0.38
         )
@@ -413,15 +442,18 @@ private struct RenderState {
         let density = Self.clamp((activityLevel * 0.34) + (moment.motion * 0.48) + 0.18)
         let tension = Self.clamp((stressLevel * 0.46) + (moment.tension * 0.42) + 0.12)
         let softness = Self.clamp((recoveryScore * 0.46) + (moment.warmth * 0.40) + 0.14)
+        let energy = Self.clamp((density * 0.58) + (tension * 0.32) + ((1 - softness) * 0.10))
         let sceneSeed = seed &+ UInt64(second &* 97)
 
         var kick = Array(repeating: false, count: 16)
         var snare = Array(repeating: false, count: 16)
+        var clap = Array(repeating: false, count: 16)
         var hat = Array(repeating: false, count: 16)
         var bass = Array(repeating: false, count: 16)
 
         [0, 8].forEach { kick[$0] = true }
         [4, 12].forEach { snare[$0] = true }
+        [4, 12].forEach { clap[$0] = true }
         [0, 6, 10, 14].forEach { bass[$0] = true }
 
         for step in stride(from: 0, to: 16, by: 2) {
@@ -444,12 +476,24 @@ private struct RenderState {
             kick[15] = true
         }
 
+        if energy > 0.64 && Self.random01(sceneSeed, salt: 9) > 0.44 {
+            kick[6] = true
+        }
+
         if tension > 0.62 || Self.random01(sceneSeed, salt: 5) > 0.68 {
             snare[15] = true
         }
 
         if density > 0.6 && Self.random01(sceneSeed, salt: 6) > 0.52 {
             snare[7] = true
+        }
+
+        if energy > 0.52 && Self.random01(sceneSeed, salt: 17) > 0.58 {
+            clap[11] = true
+        }
+
+        if tension > 0.58 && Self.random01(sceneSeed, salt: 18) > 0.5 {
+            clap[15] = true
         }
 
         if softness > 0.62 && Self.random01(sceneSeed, salt: 7) > 0.5 {
@@ -487,12 +531,14 @@ private struct RenderState {
         return LiveScene(
             kickPattern: kick,
             snarePattern: snare,
+            clapPattern: clap,
             hatPattern: hat,
             bassPattern: bass,
-            kickGain: 0.72 + (density * 0.24),
-            snareGain: 0.44 + (tension * 0.18),
-            hatGain: 0.08 + (density * 0.06),
-            bassGain: 0.17 + (softness * 0.08),
+            kickGain: 0.78 + (energy * 0.28),
+            snareGain: 0.48 + (tension * 0.22),
+            clapGain: 0.24 + (energy * 0.14),
+            hatGain: 0.10 + (density * 0.07),
+            bassGain: 0.21 + (softness * 0.09),
             padGain: 0.82 + (softness * 0.34),
             noiseGain: 0.007 + (tension * 0.008),
             wobbleRate: 0.11 + (softness * 0.16),
@@ -500,10 +546,17 @@ private struct RenderState {
             padHarmonic: 1.35 + (moment.warmth * 0.32),
             bassRatio: 0.42 + (moment.motion * 0.12),
             bassOffset: density * 6.0,
+            bassDrive: 1.4 + (energy * 0.95),
+            bassHarmonic: 0.16 + (energy * 0.18),
             kickPitch: 42 + (tension * 9),
+            kickDrive: 1.42 + (energy * 0.46),
+            kickClick: 0.045 + (energy * 0.05),
             snarePitch: 164 + (tension * 32),
             snareNoiseMix: 0.46 + (tension * 0.16),
+            clapDecay: 0.938 - (energy * 0.012),
             hatBrightness: 0.88 + (density * 0.38),
+            hatDecay: 0.976 - (energy * 0.01),
+            sidechainDepth: 0.18 + (energy * 0.22),
             motion: moment.motion,
             visualProfile: visualProfile
         )
@@ -573,10 +626,12 @@ private struct DayMoment {
 private struct LiveScene {
     let kickPattern: [Bool]
     let snarePattern: [Bool]
+    let clapPattern: [Bool]
     let hatPattern: [Bool]
     let bassPattern: [Bool]
     let kickGain: Double
     let snareGain: Double
+    let clapGain: Double
     let hatGain: Double
     let bassGain: Double
     let padGain: Double
@@ -586,10 +641,17 @@ private struct LiveScene {
     let padHarmonic: Double
     let bassRatio: Double
     let bassOffset: Double
+    let bassDrive: Double
+    let bassHarmonic: Double
     let kickPitch: Double
+    let kickDrive: Double
+    let kickClick: Double
     let snarePitch: Double
     let snareNoiseMix: Double
+    let clapDecay: Double
     let hatBrightness: Double
+    let hatDecay: Double
+    let sidechainDepth: Double
     let motion: Double
     let visualProfile: [CGFloat]
 }

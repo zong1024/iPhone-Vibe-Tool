@@ -589,8 +589,12 @@ struct BiometricsProfile: Equatable {
     }
 
     var grooveLabel: String {
-        if activityLevel > 0.72 {
-            return "碎拍"
+        if activityLevel > 0.78 {
+            return "前冲碎拍"
+        }
+
+        if activityLevel > 0.6 {
+            return "弹跳稳拍"
         }
 
         if stressLevel > 0.62 {
@@ -662,7 +666,7 @@ struct BiometricsProfile: Equatable {
             )
         ],
         insightText: "在健康数据完成同步前，App 会先用一组温和的默认声场开始播放。",
-        playbackNote: "声场会每秒重组一次，沿着今天的身体曲线持续改写鼓组、铺底和颗粒纹理。"
+        playbackNote: "声场会每秒重组一次，把 kick、clap、低频和颗粒纹理沿着今天的身体曲线持续改写。"
     )
 
     static func live(_ snapshot: HealthSnapshot) -> BiometricsProfile {
@@ -752,7 +756,7 @@ struct BiometricsProfile: Equatable {
                 )
             ],
             insightText: summaryText,
-            playbackNote: "播放时会每秒参考今天的身体状态重新编排，心率、步数、睡眠和 HRV 会持续改写节奏张力。"
+            playbackNote: "播放时会每秒参考今天的身体状态重编鼓点和低频推进，心率、步数、睡眠和 HRV 会持续拉高或放松节奏张力。"
         )
     }
 
