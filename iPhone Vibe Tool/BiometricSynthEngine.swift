@@ -34,12 +34,17 @@ final class BiometricSynthEngine: ObservableObject {
     private var kickPhase = 0.0
     private var snareTonePhase = 0.0
     private var wobblePhase = 0.0
+    private var leadPhase = 0.0
+    private var leadDetunePhase = 0.0
+    private var sweepPhase = 0.0
 
     private var kickEnvelope = 0.0
     private var snareEnvelope = 0.0
     private var clapEnvelope = 0.0
     private var hatEnvelope = 0.0
     private var bassEnvelope = 0.0
+    private var leadEnvelope = 0.0
+    private var currentLeadFrequency = 220.0
 
     private var hatNoiseMemory = 0.0
     private var noiseSeed: UInt64 = 0x1234ABCD
@@ -133,9 +138,11 @@ final class BiometricSynthEngine: ObservableObject {
                 let snare = self.nextSnareSample(sampleRate: sampleRate, state: state, scene: scene)
                 let clap = self.nextClapSample(scene: scene)
                 let hat = self.nextHatSample(state: state, scene: scene)
+                let lead = self.nextLeadSample(sampleRate: sampleRate, scene: scene)
+                let sweep = self.nextSweepSample(sampleRate: sampleRate, scene: scene)
                 let roomNoise = self.nextNoiseBed(state: state, scene: scene)
 
-                let sampleValue = self.clamped(pad + bass + kick + snare + clap + hat + roomNoise)
+                let sampleValue = self.clamped(pad + bass + kick + snare + clap + hat + lead + sweep + roomNoise)
                 peak = max(peak, abs(sampleValue))
 
                 for buffer in bufferList {
@@ -197,6 +204,11 @@ final class BiometricSynthEngine: ObservableObject {
             bassEnvelope = 1.0
             bassPhase = 0
         }
+
+        if scene.leadPattern[step] {
+            currentLeadFrequency = scene.leadFrequencies[step]
+            leadEnvelope = max(leadEnvelope, scene.leadAttack)
+        }
     }
 
     private func nextPadSample(sampleRate: Double, state: RenderState, scene: LiveScene) -> Double {
@@ -208,8 +220,8 @@ final class BiometricSynthEngine: ObservableObject {
         }
 
         let wobble = sin(wobblePhase) * scene.padMotion
-        let primaryFrequency = state.baseFrequency + wobble
-        let secondaryFrequency = state.baseFrequency * scene.padHarmonic
+        let primaryFrequency = scene.rootFrequency + wobble
+        let secondaryFrequency = scene.rootFrequency * scene.padHarmonic
 
         padPhase += (2.0 * Double.pi * primaryFrequency) / sampleRate
         padDetunePhase += (2.0 * Double.pi * secondaryFrequency) / sampleRate
@@ -233,7 +245,7 @@ final class BiometricSynthEngine: ObservableObject {
             return 0
         }
 
-        let bassFrequency = max(42, state.baseFrequency * scene.bassRatio + scene.bassOffset)
+        let bassFrequency = max(42, scene.rootFrequency * scene.bassRatio + scene.bassOffset)
         bassPhase += (2.0 * Double.pi * bassFrequency) / sampleRate
         if bassPhase > 2.0 * Double.pi {
             bassPhase -= 2.0 * Double.pi
@@ -311,6 +323,45 @@ final class BiometricSynthEngine: ObservableObject {
         return sample
     }
 
+    private func nextLeadSample(sampleRate: Double, scene: LiveScene) -> Double {
+        guard leadEnvelope > 0.0008 else {
+            return 0
+        }
+
+        leadPhase += (2.0 * Double.pi * currentLeadFrequency) / sampleRate
+        leadDetunePhase += (2.0 * Double.pi * (currentLeadFrequency * 1.004)) / sampleRate
+
+        if leadPhase > 2.0 * Double.pi {
+            leadPhase -= 2.0 * Double.pi
+        }
+
+        if leadDetunePhase > 2.0 * Double.pi {
+            leadDetunePhase -= 2.0 * Double.pi
+        }
+
+        let bright = sin(leadPhase)
+        let detuned = asin(sin(leadDetunePhase)) * (2.0 / Double.pi)
+        let lead = tanh((bright * 0.92) + (detuned * 0.44)) * leadEnvelope * scene.leadGain
+
+        leadEnvelope *= scene.leadDecay
+        return lead
+    }
+
+    private func nextSweepSample(sampleRate: Double, scene: LiveScene) -> Double {
+        guard scene.sweepGain > 0.0008 else {
+            return 0
+        }
+
+        sweepPhase += (2.0 * Double.pi * scene.sweepRate) / sampleRate
+        if sweepPhase > 2.0 * Double.pi {
+            sweepPhase -= 2.0 * Double.pi
+        }
+
+        let mod = (sin(sweepPhase) + 1) * 0.5
+        let noise = nextWhiteNoise()
+        return noise * scene.sweepGain * (0.28 + mod * 0.72)
+    }
+
     private func nextNoiseBed(state: RenderState, scene: LiveScene) -> Double {
         let texture = nextWhiteNoise()
         return texture * state.noiseLevel * scene.noiseGain
@@ -338,12 +389,17 @@ final class BiometricSynthEngine: ObservableObject {
         clapEnvelope = 0
         hatEnvelope = 0
         bassEnvelope = 0
+        leadEnvelope = 0
         padPhase = 0
         padDetunePhase = 0
         bassPhase = 0
         kickPhase = 0
         snareTonePhase = 0
         wobblePhase = 0
+        leadPhase = 0
+        leadDetunePhase = 0
+        sweepPhase = 0
+        currentLeadFrequency = state.baseFrequency * 1.5
         hatNoiseMemory = 0
     }
 
@@ -368,6 +424,7 @@ final class BiometricSynthEngine: ObservableObject {
             snareEnvelope * 0.72,
             clapEnvelope * 0.66,
             bassEnvelope * 0.5,
+            leadEnvelope * 0.44,
             hatEnvelope * 0.38
         )
 
@@ -417,6 +474,7 @@ private struct RenderState {
     let stressLevel: Double
     let recoveryScore: Double
     let baseFrequency: Double
+    let mode: MusicalMode
     let seed: UInt64
     let dayMoments: [DayMoment]
 
@@ -428,6 +486,7 @@ private struct RenderState {
         stressLevel = profile.stressLevel
         recoveryScore = profile.recoveryScore
         baseFrequency = Self.baseFrequency(for: profile.key)
+        mode = Self.mode(for: profile.key)
         seed = Self.makeSeed(profile: profile)
         dayMoments = Self.makeDayMoments(
             activityLevel: activityLevel,
@@ -439,10 +498,15 @@ private struct RenderState {
 
     func scene(forSecond second: Int) -> LiveScene {
         let moment = dayMoments[second % dayMoments.count]
+        let barIndex = max(0, Int((Double(second) * tempo) / 240.0))
+        let phraseBar = barIndex % 16
+        let section = SongSection(phraseBar: phraseBar)
+        let chord = Self.chord(for: mode, baseFrequency: baseFrequency, barIndex: barIndex)
         let density = Self.clamp((activityLevel * 0.34) + (moment.motion * 0.48) + 0.18)
         let tension = Self.clamp((stressLevel * 0.46) + (moment.tension * 0.42) + 0.12)
         let softness = Self.clamp((recoveryScore * 0.46) + (moment.warmth * 0.40) + 0.14)
-        let energy = Self.clamp((density * 0.58) + (tension * 0.32) + ((1 - softness) * 0.10))
+        let sectionEnergy = section.energyBias
+        let energy = Self.clamp((density * 0.52) + (tension * 0.28) + ((1 - softness) * 0.08) + sectionEnergy)
         let sceneSeed = seed &+ UInt64(second &* 97)
 
         var kick = Array(repeating: false, count: 16)
@@ -450,6 +514,8 @@ private struct RenderState {
         var clap = Array(repeating: false, count: 16)
         var hat = Array(repeating: false, count: 16)
         var bass = Array(repeating: false, count: 16)
+        var lead = Array(repeating: false, count: 16)
+        var leadFrequencies = Array(repeating: chord.rootFrequency * 2.0, count: 16)
 
         [0, 8].forEach { kick[$0] = true }
         [4, 12].forEach { snare[$0] = true }
@@ -512,38 +578,84 @@ private struct RenderState {
             }
         }
 
+        let leadTemplate = section.leadTemplate
+        for step in leadTemplate {
+            lead[step] = true
+            let noteIndex = (step + phraseBar + Int(sceneSeed % 3)) % chord.leadPalette.count
+            leadFrequencies[step] = chord.leadPalette[noteIndex]
+        }
+
+        switch section {
+        case .intro:
+            [10, 14].forEach { hat[$0] = false }
+            clap = Array(repeating: false, count: 16)
+            lead = Array(repeating: false, count: 16)
+        case .groove:
+            break
+        case .lift:
+            [3, 7, 11, 15].forEach { hat[$0] = true }
+            if Self.random01(sceneSeed, salt: 25) > 0.34 {
+                lead[15] = true
+                leadFrequencies[15] = chord.leadPalette.last ?? (chord.rootFrequency * 2.0)
+            }
+        case .drop:
+            [1, 5, 9, 13].forEach { hat[$0] = true }
+            if Self.random01(sceneSeed, salt: 26) > 0.42 {
+                kick[2] = true
+                kick[11] = true
+            }
+        case .breakdown:
+            kick[8] = false
+            kick[10] = false
+            hat = Array(repeating: false, count: 16)
+            [6, 14].forEach { hat[$0] = true }
+            bass[6] = false
+            clap[11] = false
+        case .finale:
+            [1, 3, 5, 7, 9, 11, 13, 15].forEach { hat[$0] = true }
+            if Self.random01(sceneSeed, salt: 27) > 0.3 {
+                kick[2] = true
+                snare[6] = true
+                clap[14] = true
+            }
+        }
+
         let visualProfile = [
             0.24 + density * 0.18,
             0.34 + tension * 0.22,
             0.28 + softness * 0.18,
-            0.40 + moment.motion * 0.22,
+            0.40 + moment.motion * 0.22 + section.visualLift * 0.06,
             0.30 + tension * 0.20,
             0.48 + density * 0.24,
             0.34 + softness * 0.22,
-            0.54 + tension * 0.20,
+            0.54 + tension * 0.20 + section.visualLift * 0.08,
             0.28 + moment.motion * 0.20,
             0.46 + softness * 0.24,
             0.32 + density * 0.18,
-            0.58 + tension * 0.18
+            0.58 + tension * 0.18 + section.visualLift * 0.1
         ]
         .map { CGFloat(Self.clamp($0)) }
 
         return LiveScene(
+            section: section,
+            rootFrequency: chord.rootFrequency,
             kickPattern: kick,
             snarePattern: snare,
             clapPattern: clap,
             hatPattern: hat,
             bassPattern: bass,
+            leadPattern: lead,
+            leadFrequencies: leadFrequencies,
             kickGain: 0.78 + (energy * 0.28),
             snareGain: 0.48 + (tension * 0.22),
             clapGain: 0.24 + (energy * 0.14),
             hatGain: 0.10 + (density * 0.07),
             bassGain: 0.21 + (softness * 0.09),
-            padGain: 0.82 + (softness * 0.34),
+            padGain: 0.76 + (softness * 0.28) + section.padBias,
             noiseGain: 0.007 + (tension * 0.008),
             wobbleRate: 0.11 + (softness * 0.16),
-            padMotion: 0.4 + (softness * 1.05),
-            padHarmonic: 1.35 + (moment.warmth * 0.32),
+            padMotion: 0.32 + (softness * 0.92) + section.motionBias,
+            padHarmonic: chord.padHarmonic,
             bassRatio: 0.42 + (moment.motion * 0.12),
             bassOffset: density * 6.0,
             bassDrive: 1.4 + (energy * 0.95),
@@ -557,6 +669,11 @@ private struct RenderState {
             hatBrightness: 0.88 + (density * 0.38),
             hatDecay: 0.976 - (energy * 0.01),
             sidechainDepth: 0.18 + (energy * 0.22),
+            leadGain: section.leadGain + (energy * 0.12),
+            leadDecay: section.leadDecay,
+            leadAttack: section.leadAttack,
+            sweepGain: section.sweepGain + (tension * 0.018),
+            sweepRate: section.sweepRate,
             motion: moment.motion,
             visualProfile: visualProfile
         )
@@ -570,6 +687,15 @@ private struct RenderState {
             return 220.0
         default:
             return 146.83
+        }
+    }
+
+    private static func mode(for key: String) -> MusicalMode {
+        switch key {
+        case "F 大调":
+            return .major
+        default:
+            return .minor
         }
     }
 
@@ -615,6 +741,35 @@ private struct RenderState {
     private static func clamp(_ value: Double) -> Double {
         min(max(value, 0), 1)
     }
+
+    private static func chord(for mode: MusicalMode, baseFrequency: Double, barIndex: Int) -> ChordSpec {
+        let progression: [Int]
+        switch mode {
+        case .major:
+            progression = [0, 9, 5, 7]
+        case .minor:
+            progression = [0, 8, 3, 10]
+        }
+
+        let rootSemitone = progression[barIndex % progression.count]
+        let rootFrequency = baseFrequency * pow(2.0, Double(rootSemitone) / 12.0)
+        let leadSteps: [Int]
+        switch mode {
+        case .major:
+            leadSteps = [0, 4, 7, 9, 12, 16]
+        case .minor:
+            leadSteps = [0, 3, 7, 10, 12, 15]
+        }
+
+        let leadPalette = leadSteps.map { rootFrequency * pow(2.0, Double($0) / 12.0) }
+        let padHarmonic = mode == .major ? 1.50 : 1.42
+
+        return ChordSpec(
+            rootFrequency: rootFrequency,
+            padHarmonic: padHarmonic,
+            leadPalette: leadPalette
+        )
+    }
 }
 
 private struct DayMoment {
@@ -623,12 +778,207 @@ private struct DayMoment {
     let warmth: Double
 }
 
+private enum MusicalMode {
+    case major
+    case minor
+}
+
+private enum SongSection {
+    case intro
+    case groove
+    case lift
+    case drop
+    case breakdown
+    case finale
+
+    init(phraseBar: Int) {
+        switch phraseBar {
+        case 0 ... 1:
+            self = .intro
+        case 2 ... 5:
+            self = .groove
+        case 6 ... 7:
+            self = .lift
+        case 8 ... 11:
+            self = .drop
+        case 12 ... 13:
+            self = .breakdown
+        default:
+            self = .finale
+        }
+    }
+
+    var energyBias: Double {
+        switch self {
+        case .intro:
+            return -0.12
+        case .groove:
+            return 0.02
+        case .lift:
+            return 0.1
+        case .drop:
+            return 0.22
+        case .breakdown:
+            return -0.08
+        case .finale:
+            return 0.26
+        }
+    }
+
+    var padBias: Double {
+        switch self {
+        case .intro, .breakdown:
+            return 0.14
+        case .lift:
+            return 0.08
+        case .drop, .finale:
+            return -0.02
+        case .groove:
+            return 0
+        }
+    }
+
+    var motionBias: Double {
+        switch self {
+        case .intro:
+            return -0.04
+        case .lift:
+            return 0.08
+        case .drop, .finale:
+            return 0.12
+        default:
+            return 0
+        }
+    }
+
+    var visualLift: Double {
+        switch self {
+        case .intro:
+            return 0.04
+        case .groove:
+            return 0.1
+        case .lift:
+            return 0.2
+        case .drop:
+            return 0.3
+        case .breakdown:
+            return 0.08
+        case .finale:
+            return 0.34
+        }
+    }
+
+    var leadTemplate: [Int] {
+        switch self {
+        case .intro:
+            return []
+        case .groove:
+            return [2, 6, 10, 14]
+        case .lift:
+            return [1, 5, 9, 12, 15]
+        case .drop:
+            return [1, 3, 6, 9, 11, 14]
+        case .breakdown:
+            return [4, 8, 12]
+        case .finale:
+            return [1, 3, 5, 8, 10, 13, 15]
+        }
+    }
+
+    var leadGain: Double {
+        switch self {
+        case .intro:
+            return 0
+        case .groove:
+            return 0.16
+        case .lift:
+            return 0.22
+        case .drop:
+            return 0.26
+        case .breakdown:
+            return 0.18
+        case .finale:
+            return 0.3
+        }
+    }
+
+    var leadDecay: Double {
+        switch self {
+        case .intro:
+            return 0.94
+        case .groove:
+            return 0.968
+        case .lift:
+            return 0.974
+        case .drop:
+            return 0.978
+        case .breakdown:
+            return 0.97
+        case .finale:
+            return 0.979
+        }
+    }
+
+    var leadAttack: Double {
+        switch self {
+        case .intro:
+            return 0
+        case .groove:
+            return 0.72
+        case .lift:
+            return 0.82
+        case .drop:
+            return 0.9
+        case .breakdown:
+            return 0.78
+        case .finale:
+            return 0.94
+        }
+    }
+
+    var sweepGain: Double {
+        switch self {
+        case .lift:
+            return 0.02
+        case .drop:
+            return 0.008
+        case .finale:
+            return 0.015
+        default:
+            return 0
+        }
+    }
+
+    var sweepRate: Double {
+        switch self {
+        case .lift:
+            return 0.32
+        case .drop:
+            return 0.18
+        case .finale:
+            return 0.28
+        default:
+            return 0.12
+        }
+    }
+}
+
+private struct ChordSpec {
+    let rootFrequency: Double
+    let padHarmonic: Double
+    let leadPalette: [Double]
+}
+
 private struct LiveScene {
+    let section: SongSection
+    let rootFrequency: Double
     let kickPattern: [Bool]
     let snarePattern: [Bool]
     let clapPattern: [Bool]
     let hatPattern: [Bool]
     let bassPattern: [Bool]
+    let leadPattern: [Bool]
+    let leadFrequencies: [Double]
     let kickGain: Double
     let snareGain: Double
     let clapGain: Double
@@ -652,6 +1002,11 @@ private struct LiveScene {
     let hatBrightness: Double
     let hatDecay: Double
     let sidechainDepth: Double
+    let leadGain: Double
+    let leadDecay: Double
+    let leadAttack: Double
+    let sweepGain: Double
+    let sweepRate: Double
     let motion: Double
     let visualProfile: [CGFloat]
 }

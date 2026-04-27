@@ -666,7 +666,7 @@ struct BiometricsProfile: Equatable {
             )
         ],
         insightText: "在健康数据完成同步前，App 会先用一组温和的默认声场开始播放。",
-        playbackNote: "声场会每秒重组一次，把 kick、clap、低频和颗粒纹理沿着今天的身体曲线持续改写。"
+        playbackNote: "它会在前奏、推进、drop 和收束之间循环展开，并持续根据今天的身体曲线重排鼓、低频与旋律。"
     )
 
     static func live(_ snapshot: HealthSnapshot) -> BiometricsProfile {
@@ -756,7 +756,7 @@ struct BiometricsProfile: Equatable {
                 )
             ],
             insightText: summaryText,
-            playbackNote: "播放时会每秒参考今天的身体状态重编鼓点和低频推进，心率、步数、睡眠和 HRV 会持续拉高或放松节奏张力。"
+            playbackNote: "播放时会一边推进段落，一边根据今天的身体状态重编鼓点、低频和旋律线，听感会更像一首完整电子曲。"
         )
     }
 
